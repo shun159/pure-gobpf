@@ -43,26 +43,13 @@ import (
 type ELFContext struct {
 	// .elf will have multiple sections and maps
 	Section map[string]ELFSection // Indexed by section type
-	Maps    map[string]ELFMap     // Index by map name
+	Maps    map[string]ebpf.BPFMap     // Index by map name
 }
 
 type ELFSection struct {
 	// Each sections will have a program but a single section type can have multiple programs
 	// like tc_cls
-	Programs map[string]ELFProgram // Index by program name
-}
-
-type ELFProgram struct {
-	// return program name, prog FD and pinPath
-	ProgFD  int
-	PinPath string
-}
-
-type ELFMap struct {
-	// return map type, map FD and pinPath
-	MapType int
-	MapFD   int
-	PinPath string
+	Programs map[string]ebpf.BPFProgram // Index by program name
 }
 
 //https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L71
@@ -167,7 +154,12 @@ func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, el
 	for index := 0; index < len(GlobalMapData); index++ {
 		log.Infof("Loading maps")
 		loadedMaps := GlobalMapData[index]
-		mapFD, _ := loadedMaps.CreateMap()
+		bpfMap := ebpf.BPFMap{
+			MapFD: 0,
+			MapMetaData: loadedMaps,
+		}
+		
+		mapFD, _ := bpfMap.CreateMap()
 		if mapFD == -1 {
 			//Even if one map fails, we error out
 			log.Infof("Failed to create map, continue to next map..just for debugging")
@@ -176,12 +168,11 @@ func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, el
 
 		mapNameStr := loadedMaps.Name
 		pinPath := "/sys/fs/bpf/globals/" + mapNameStr
-		loadedMaps.PinMap(mapFD, pinPath)
-		c.Maps[mapNameStr] = ELFMap{
-			MapType: int(loadedMaps.Def.Type),
-			MapFD:   mapFD,
-			PinPath: pinPath,
-		}
+		bpfMap.PinMap(mapFD, pinPath)
+		
+		bpfMap.MapFD = uint32(mapFD)
+		
+		c.Maps[mapNameStr] = bpfMap
 	}
 	return nil
 }
@@ -311,7 +302,7 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 		}
 	}
 
-	var pgmList = make(map[string]ELFProgram)
+	var pgmList = make(map[string]ebpf.BPFProgram)
 	// Iterate over the symbols in the symbol table
 	for _, symbol := range symbolTable {
 		// Check if the symbol is a function
@@ -349,7 +340,7 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 						return fmt.Errorf("Failed to Load the prog")
 					}
 					log.Infof("loaded prog with %d", progFD)
-					pgmList[ProgName] = ELFProgram{
+					pgmList[ProgName] = ebpf.BPFProgram{
 						ProgFD:  progFD,
 						PinPath: pinPath,
 					}
@@ -377,7 +368,7 @@ func doLoadELF(r io.ReaderAt) (*ELFContext, error) {
 
 	c := &ELFContext{}
 	c.Section = make(map[string]ELFSection)
-	c.Maps = make(map[string]ELFMap)
+	c.Maps = make(map[string]ebpf.BPFMap)
 	reloSectionMap := make(map[uint32]*elf.Section)
 
 	var dataMaps *elf.Section

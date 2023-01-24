@@ -18,12 +18,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"syscall"
 	"unsafe"
+	"encoding/gob"
+	"bytes"
+	"reflect"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
-	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
 
@@ -81,6 +81,11 @@ const (
 	BPF_DIR_GLOBALS = "globals"
 )
 
+type BPFMap struct {
+	MapFD   	uint32
+	MapMetaData 	BpfMapData
+}
+
 type BpfMapDef struct {
 	Type       uint32
 	KeySize    uint32
@@ -92,10 +97,9 @@ type BpfMapDef struct {
 }
 
 type BpfMapData struct {
-	Def      BpfMapDef
-	numaNode uint32
-	//Name     [16]byte
-	Name string
+	Def      	BpfMapDef
+	numaNode 	uint32
+	Name 		string
 }
 
 type BpfPin struct {
@@ -104,24 +108,31 @@ type BpfPin struct {
 	FileFlags uint32
 }
 
-func (m *BpfMapData) CreateMap() (int, error) {
+type BpfMapAttr struct {
+	MapFD 		uint32
+	Key   		uintptr
+	Value	 	uintptr
+	Flags         	uint64
+}
+
+func (m *BPFMap) CreateMap() (int, error) {
 	var log = logger.Get()
 
 	mapCont := BpfMapData{
 		Def: BpfMapDef{
-			Type:       uint32(m.Def.Type),
-			KeySize:    m.Def.KeySize,
-			ValueSize:  m.Def.ValueSize,
-			MaxEntries: m.Def.MaxEntries,
-			Flags:      m.Def.Flags,
+			Type:       uint32(m.MapMetaData.Def.Type),
+			KeySize:    m.MapMetaData.Def.KeySize,
+			ValueSize:  m.MapMetaData.Def.ValueSize,
+			MaxEntries: m.MapMetaData.Def.MaxEntries,
+			Flags:      m.MapMetaData.Def.Flags,
 			InnerMapFd: 0,
 		},
-		Name: m.Name,
+		Name: m.MapMetaData.Name,
 	}
 	mapData := unsafe.Pointer(&mapCont)
 	mapDataSize := unsafe.Sizeof(mapCont)
 
-	log.Infof("Calling BPFsys for name %s mapType %d keysize %d valuesize %d max entries %d and flags %d", string(m.Name[:]), m.Def.Type, m.Def.KeySize, m.Def.ValueSize, m.Def.MaxEntries, m.Def.Flags)
+	log.Infof("Calling BPFsys for name %s mapType %d keysize %d valuesize %d max entries %d and flags %d", string(m.MapMetaData.Name[:]), m.MapMetaData.Def.Type, m.MapMetaData.Def.KeySize, m.MapMetaData.Def.ValueSize, m.MapMetaData.Def.MaxEntries, m.MapMetaData.Def.Flags)
 
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
@@ -139,23 +150,13 @@ func (m *BpfMapData) CreateMap() (int, error) {
 	return int(ret), nil
 }
 
-func mount_bpf_fs() error {
+func (m *BPFMap) PinMap(mapFD int, pinPath string) error {
 	var log = logger.Get()
-	log.Infof("Let's mount BPF FS")
-	err := syscall.Mount("bpf", "/sys/fs/bpf", "bpf", 0, "mode=0700")
-	if err != nil{
-		log.Errorf("error mounting bpffs: %v", err)
-	}
-	return err
-}
-
-func (m *BpfMapData) PinMap(mapFD int, pinPath string) error {
-	var log = logger.Get()
-	if m.Def.Pinning == PIN_NONE {
+	if m.MapMetaData.Def.Pinning == PIN_NONE {
 		return nil
 	}
 
-	if m.Def.Pinning == PIN_GLOBAL_NS {
+	if m.MapMetaData.Def.Pinning == PIN_GLOBAL_NS {
 
 		err := os.MkdirAll(filepath.Dir(pinPath), 0755)
 		if err != nil {
@@ -177,35 +178,6 @@ func (m *BpfMapData) PinMap(mapFD int, pinPath string) error {
 	}
 	return nil
 
-}
-
-func PinProg(progFD int, pinPath string) error {
-	var log = logger.Get()
-/*
-	err := mount_bpf_fs()
-	if err != nil{
-		log.Errorf("error mounting bpffs: %v", err)
-		return err
-	}
-
- */
-
-	err := os.MkdirAll(filepath.Dir(pinPath), 0755)
-	if err != nil {
-		log.Infof("error creating directory %q: %v", filepath.Dir(pinPath), err)
-		return fmt.Errorf("error creating directory %q: %v", filepath.Dir(pinPath), err)
-	}
-	_, err = os.Stat(pinPath)
-	if err == nil {
-		log.Infof("aborting, found file at %q", pinPath)
-		return fmt.Errorf("aborting, found file at %q", pinPath)
-	}
-	if err != nil && !os.IsNotExist(err) {
-		log.Infof("failed to stat %q: %v", pinPath, err)
-		return fmt.Errorf("failed to stat %q: %v", pinPath, err)
-	}
-
-	return PinObject(progFD, pinPath)
 }
 
 func PinObject(objFD int, pinPath string) error {
@@ -236,54 +208,63 @@ func PinObject(objFD int, pinPath string) error {
 	return nil
 }
 
-func LoadProg(progType string, data []byte, licenseStr string, pinPath string) (int, error) {
+func convToBytes(val interface{}, size uint32) ([]byte, error) {
+
+	valType := reflect.TypeOf(val)
+
+	if valType.Elem().Size() != uintptr(size) {
+		return nil, fmt.Errorf(
+			"val type size(%d) doesn't match size definition(%d)",
+			valType.Elem().Size(),
+			size,
+		)
+	}
+	
+	var valBuf bytes.Buffer
+    	enc := gob.NewEncoder(&valBuf)
+    	err := enc.Encode(val)
+    	if err != nil {
+        	return nil, err
+    	}
+	return valBuf.Bytes(), nil
+}
+
+func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint64) error {
+
 	var log = logger.Get()
-
-	insDefSize := C.BPF_INS_DEF_SIZE
-	var prog_type uint32
-	switch progType {
-	case "xdp":
-		prog_type = uint32(netlink.BPF_PROG_TYPE_XDP)
-	case "tc_cls":
-		prog_type = uint32(netlink.BPF_PROG_TYPE_SCHED_CLS)
-	case "tc_act":
-		prog_type = uint32(netlink.BPF_PROG_TYPE_SCHED_ACT)
-	default:
-		prog_type = uint32(netlink.BPF_PROG_TYPE_UNSPEC)
+	attr := BpfMapAttr{
+		MapFD: m.MapFD,
+		Flags: updateFlags,
 	}
 
-	logBuf := make([]byte, 65535)
-	program := netlink.BPFAttr{
-		ProgType: prog_type,
-		LogBuf:   uintptr(unsafe.Pointer(&logBuf[0])),
-		LogSize:  uint32(cap(logBuf) - 1),
-		LogLevel: 1,
-	}
-
-	program.Insns = uintptr(unsafe.Pointer(&data[0]))
-	program.InsnCnt = uint32(len(data) / insDefSize)
-
-	license := []byte(licenseStr)
-	program.License = uintptr(unsafe.Pointer(&license[0]))
-
-	fd, _, errno := unix.Syscall(unix.SYS_BPF,
-		BPF_PROG_LOAD,
-		uintptr(unsafe.Pointer(&program)),
-		unsafe.Sizeof(program))
-	runtime.KeepAlive(data)
-	runtime.KeepAlive(license)
-
-	log.Infof("Load prog done with fd : %d", int(fd))
-	if errno != 0 {
-		log.Infof(string(logBuf))
-		return 0, errno
-	}
-
-	//Pin the prog
-	err := PinProg(int(fd), pinPath)
+	keyBytes, err := convToBytes(key, m.MapMetaData.Def.KeySize)
 	if err != nil {
-		log.Infof("pin prog failed %v", err)
-		return 0, err
+		return err
 	}
-	return int(fd), nil
+
+	valBytes, err := convToBytes(value, m.MapMetaData.Def.ValueSize)
+	if err != nil {
+		return err
+	}
+	
+	attr.Key = uintptr(unsafe.Pointer(&keyBytes[0]))
+	attr.Value = uintptr(unsafe.Pointer(&valBytes[0]))
+
+
+	log.Infof("Calling BPFsys for map update")
+
+	ret, _, errno := unix.Syscall(
+		unix.SYS_BPF,
+		BPF_MAP_UPDATE_ELEM,
+		uintptr(unsafe.Pointer(&attr)),
+		unsafe.Sizeof(attr),
+	)
+
+	if errno < 0 {
+		log.Infof("Unable to update map and ret %d and err %s", int(ret), errno)
+		return fmt.Errorf("Unable to update map: %s", errno)
+	}
+
+	log.Infof("Update map done with fd : %d", int(ret))
+	return nil
 }
