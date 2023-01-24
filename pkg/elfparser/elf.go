@@ -35,7 +35,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/achevuru/pure-gobpf/pkg/ebpf"
+	"github.com/jayanthvn/pure-gobpf/pkg/ebpf"
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 )
 
