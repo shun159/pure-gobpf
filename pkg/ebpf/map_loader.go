@@ -1,5 +1,4 @@
 package ebpf
-
 /*
 #include <linux/unistd.h>
 #include <linux/bpf.h>
@@ -21,9 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"unsafe"
-	"runtime"
-
-	//"reflect"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 	"golang.org/x/sys/unix"
@@ -235,9 +231,16 @@ func convToBytes(val interface{}, size uint32) ([]byte, error) {
 	return valBuf.Bytes(), nil
 }
 
+type BPFInetTrieKey struct {
+    Prefixlen uint8
+    Addr [4]byte
+    Pad [3]byte
+}
+
 func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint64) error {
 
 	var log = logger.Get()
+	/*
 	attr := BpfMapAttr{
 		MapFD: uint32(m.MapFD),
 		Flags: updateFlags,
@@ -257,11 +260,28 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 
 	attr.Key = uint64(Key)
 	attr.Value = uint64(Value)
+	*/
+	//Dummy data to test syscall
 
-	log.Infof("Calling BPFsys for map update")
+	dummykey := BPFInetTrieKey{
+		Prefixlen: 24,
+		Addr: [4]byte{192, 168, 0, 0},
+	}
+	dummyvalue := uint32(1)
 
-	runtime.KeepAlive(Key)
-	runtime.KeepAlive(Value)
+	//Update the LPM trie map
+	if _, _, err := unix.Syscall6(unix.SYS_BPF, unix.BPF_MAP_UPDATE_ELEM, uintptr(m.MapFD), uintptr(unsafe.Pointer(&dummykey)), uintptr(unsafe.Pointer(&dummyvalue)), unix.BPF_ANY, 0); err != 0 {
+		log.Infof("Failed to update LPM trie map:", err)
+	}
+	log.Infof("Calling BPFsys for map update DONE")
+	/*
+	key := BPFInetTrieKey{
+		Prefixlen: 24,
+		Addr: [4]byte{192, 168, 0, 0},
+	}
+	value := uint32(1)
+	//runtime.KeepAlive(Key)
+	//runtime.KeepAlive(Value)
 
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
@@ -273,8 +293,8 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 	if errno < 0 {
 		log.Infof("Unable to update map and ret %d and err %s", int(ret), errno)
 		return fmt.Errorf("Unable to update map: %s", errno)
-	}
+	}*/
 
-	log.Infof("Update map done with fd : %d and err %s", int(ret), errno)
+	//log.Infof("Update map done with fd : %d and err %s", int(ret), err)
 	return nil
 }
