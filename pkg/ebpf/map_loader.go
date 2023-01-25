@@ -268,12 +268,13 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 		Addr: [4]byte{192, 168, 0, 0},
 	}
 	dummyvalue := uint32(1)
-
+/*
 	//Update the LPM trie map
 	if _, _, err := unix.Syscall6(unix.SYS_BPF, unix.BPF_MAP_UPDATE_ELEM, uintptr(m.MapFD), uintptr(unsafe.Pointer(&dummykey)), uintptr(unsafe.Pointer(&dummyvalue)), unix.BPF_ANY, 0); err != 0 {
 		log.Infof("Failed to update LPM trie map:", err)
 	}
 	log.Infof("Calling BPFsys for map update DONE")
+	*/
 	/*
 	key := BPFInetTrieKey{
 		Prefixlen: 24,
@@ -282,7 +283,14 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 	value := uint32(1)
 	//runtime.KeepAlive(Key)
 	//runtime.KeepAlive(Value)
+	*/
 
+	attr := BpfMapAttr{
+		MapFD: uint32(m.MapFD),
+		Flags: updateFlags,
+		Key: uint64(uintptr(unsafe.Pointer(&dummykey))),
+		Value: uint64(uintptr(unsafe.Pointer(&dummyvalue))),
+	}
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		BPF_MAP_UPDATE_ELEM,
@@ -293,8 +301,8 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 	if errno < 0 {
 		log.Infof("Unable to update map and ret %d and err %s", int(ret), errno)
 		return fmt.Errorf("Unable to update map: %s", errno)
-	}*/
+	}
 
-	//log.Infof("Update map done with fd : %d and err %s", int(ret), err)
+	log.Infof("Update map done with fd : %d and err %s", int(ret), errno)
 	return nil
 }
