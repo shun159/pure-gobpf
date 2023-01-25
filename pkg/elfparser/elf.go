@@ -29,11 +29,12 @@ import (
 	"debug/elf"
 	"encoding/binary"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	"path"
 	"strings"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf"
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
@@ -42,8 +43,8 @@ import (
 //Ref:https://github.com/torvalds/linux/blob/v5.10/samples/bpf/bpf_load.c
 type ELFContext struct {
 	// .elf will have multiple sections and maps
-	Section map[string]ELFSection // Indexed by section type
-	Maps    map[string]ebpf.BPFMap     // Index by map name
+	Section map[string]ELFSection  // Indexed by section type
+	Maps    map[string]ebpf.BPFMap // Index by map name
 }
 
 type ELFSection struct {
@@ -155,10 +156,10 @@ func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, el
 		log.Infof("Loading maps")
 		loadedMaps := GlobalMapData[index]
 		bpfMap := ebpf.BPFMap{
-			MapFD: 0,
+			MapFD:       0,
 			MapMetaData: loadedMaps,
 		}
-		
+
 		mapFD, _ := bpfMap.CreateMap()
 		if mapFD == -1 {
 			//Even if one map fails, we error out
@@ -169,9 +170,9 @@ func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, el
 		mapNameStr := loadedMaps.Name
 		pinPath := "/sys/fs/bpf/globals/" + mapNameStr
 		bpfMap.PinMap(mapFD, pinPath)
-		
+
 		bpfMap.MapFD = uint32(mapFD)
-		
+
 		c.Maps[mapNameStr] = bpfMap
 	}
 	return nil

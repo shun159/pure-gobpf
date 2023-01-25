@@ -19,8 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"unsafe"
 	"syscall"
+	"unsafe"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 	"github.com/vishvananda/netlink"
@@ -37,7 +37,7 @@ func mount_bpf_fs() error {
 	var log = logger.Get()
 	log.Infof("Let's mount BPF FS")
 	err := syscall.Mount("bpf", "/sys/fs/bpf", "bpf", 0, "mode=0700")
-	if err != nil{
+	if err != nil {
 		log.Errorf("error mounting bpffs: %v", err)
 	}
 	return err
@@ -45,14 +45,14 @@ func mount_bpf_fs() error {
 
 func PinProg(progFD int, pinPath string) error {
 	var log = logger.Get()
-/*
-	err := mount_bpf_fs()
-	if err != nil{
-		log.Errorf("error mounting bpffs: %v", err)
-		return err
-	}
+	/*
+		err := mount_bpf_fs()
+		if err != nil{
+			log.Errorf("error mounting bpffs: %v", err)
+			return err
+		}
 
- */
+	*/
 
 	err := os.MkdirAll(filepath.Dir(pinPath), 0755)
 	if err != nil {

@@ -15,13 +15,14 @@ package ebpf
 import "C"
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"os"
 	"path/filepath"
 	"unsafe"
-	"encoding/gob"
-	"bytes"
-	"reflect"
+
+	//"reflect"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 	"golang.org/x/sys/unix"
@@ -82,8 +83,8 @@ const (
 )
 
 type BPFMap struct {
-	MapFD   	uint32
-	MapMetaData 	BpfMapData
+	MapFD       uint32
+	MapMetaData BpfMapData
 }
 
 type BpfMapDef struct {
@@ -97,9 +98,9 @@ type BpfMapDef struct {
 }
 
 type BpfMapData struct {
-	Def      	BpfMapDef
-	numaNode 	uint32
-	Name 		string
+	Def      BpfMapDef
+	numaNode uint32
+	Name     string
 }
 
 type BpfPin struct {
@@ -109,10 +110,10 @@ type BpfPin struct {
 }
 
 type BpfMapAttr struct {
-	MapFD 		uint32
-	Key   		uintptr
-	Value	 	uintptr
-	Flags         	uint64
+	MapFD uint32
+	Key   uintptr
+	Value uintptr
+	Flags uint64
 }
 
 func (m *BPFMap) CreateMap() (int, error) {
@@ -210,22 +211,25 @@ func PinObject(objFD int, pinPath string) error {
 
 func convToBytes(val interface{}, size uint32) ([]byte, error) {
 
-	valType := reflect.TypeOf(val)
+	//valType := reflect.TypeOf(val)
 
-	if valType.Elem().Size() != uintptr(size) {
-		return nil, fmt.Errorf(
-			"val type size(%d) doesn't match size definition(%d)",
-			valType.Elem().Size(),
-			size,
-		)
-	}
-	
+	/*
+		//Removed for testing
+		if valType.Elem().Size() != uintptr(size) {
+			return nil, fmt.Errorf(
+				"val type size(%d) doesn't match size definition(%d)",
+				valType.Elem().Size(),
+				size,
+			)
+		}
+	*/
+
 	var valBuf bytes.Buffer
-    	enc := gob.NewEncoder(&valBuf)
-    	err := enc.Encode(val)
-    	if err != nil {
-        	return nil, err
-    	}
+	enc := gob.NewEncoder(&valBuf)
+	err := enc.Encode(val)
+	if err != nil {
+		return nil, err
+	}
 	return valBuf.Bytes(), nil
 }
 
@@ -246,10 +250,9 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 	if err != nil {
 		return err
 	}
-	
+
 	attr.Key = uintptr(unsafe.Pointer(&keyBytes[0]))
 	attr.Value = uintptr(unsafe.Pointer(&valBytes[0]))
-
 
 	log.Infof("Calling BPFsys for map update")
 
