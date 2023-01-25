@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"unsafe"
+	"runtime"
 
 	//"reflect"
 
@@ -111,8 +112,9 @@ type BpfPin struct {
 
 type BpfMapAttr struct {
 	MapFD uint32
-	Key   uintptr
-	Value uintptr
+	pad0  [4]byte
+	Key   uint64
+	Value uint64 // union: value or next_key
 	Flags uint64
 }
 
@@ -237,7 +239,7 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 
 	var log = logger.Get()
 	attr := BpfMapAttr{
-		MapFD: m.MapFD,
+		MapFD: uint32(m.MapFD),
 		Flags: updateFlags,
 	}
 
@@ -250,11 +252,16 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 	if err != nil {
 		return err
 	}
+	Key := (uintptr(unsafe.Pointer(&keyBytes[0])))
+	Value := (uintptr(unsafe.Pointer(&valBytes[0])))
 
-	attr.Key = uintptr(unsafe.Pointer(&keyBytes[0]))
-	attr.Value = uintptr(unsafe.Pointer(&valBytes[0]))
+	attr.Key = uint64(Key)
+	attr.Value = uint64(Value)
 
 	log.Infof("Calling BPFsys for map update")
+
+	runtime.KeepAlive(Key)
+	runtime.KeepAlive(Value)
 
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
