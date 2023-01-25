@@ -268,6 +268,6 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 		return fmt.Errorf("Unable to update map: %s", errno)
 	}
 
-	log.Infof("Update map done with fd : %d", int(ret))
+	log.Infof("Update map done with fd : %d and err %s", int(ret), errno)
 	return nil
 }
