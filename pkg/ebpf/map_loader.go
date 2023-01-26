@@ -237,7 +237,7 @@ type BPFInetTrieKey struct {
     Addr [4]byte
 }
 
-func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint64) error {
+func (m *BPFMap) UpdateMap(key , value uintptr, updateFlags uint64) error {
 
 	var log = logger.Get()
 	/*
@@ -269,6 +269,7 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 		Addr: [4]byte{192, 168, 0, 0},
 	}
 	dummyvalue := uint32(1) */
+	/*
 	keyBytes, err := convToBytes(key, m.MapMetaData.Def.KeySize)
 	if err != nil {
 		return err
@@ -277,13 +278,13 @@ func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint6
 	valueBytes, err := convToBytes(value, m.MapMetaData.Def.ValueSize)
 	if err != nil {
 		return err
-	}
+	}*/
 
 	attr := BpfMapAttr{
 		MapFD: uint32(m.MapFD),
 		Flags: updateFlags,
-		Key: uint64(uintptr(unsafe.Pointer(&keyBytes[0]))),
-		Value: uint64(uintptr(unsafe.Pointer(&valueBytes[0]))),
+		Key: uint64(uintptr(unsafe.Pointer(&key))),
+		Value: uint64(uintptr(unsafe.Pointer(&value))),
 	}
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
