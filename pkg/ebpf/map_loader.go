@@ -283,8 +283,8 @@ func (m *BPFMap) UpdateMap(key , value uintptr, updateFlags uint64) error {
 	attr := BpfMapAttr{
 		MapFD: uint32(m.MapFD),
 		Flags: updateFlags,
-		Key: uint64(uintptr(unsafe.Pointer(&key))),
-		Value: uint64(uintptr(unsafe.Pointer(&value))),
+		Key: uint64(key),
+		Value: uint64(value),
 	}
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
