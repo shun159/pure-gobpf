@@ -14,8 +14,6 @@ package ebpf
 import "C"
 
 import (
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -208,77 +206,17 @@ func PinObject(objFD int, pinPath string) error {
 	return nil
 }
 
-func convToBytes(val interface{}, size uint32) ([]byte, error) {
-
-	//valType := reflect.TypeOf(val)
-
-	/*
-		//Removed for testing
-		if valType.Elem().Size() != uintptr(size) {
-			return nil, fmt.Errorf(
-				"val type size(%d) doesn't match size definition(%d)",
-				valType.Elem().Size(),
-				size,
-			)
-		}
-	*/
-
-	var valBuf bytes.Buffer
-	enc := gob.NewEncoder(&valBuf)
-	err := enc.Encode(val)
-	if err != nil {
-		return nil, err
-	}
-	return valBuf.Bytes(), nil
+func (m *BPFMap) CreateMapEntry(key , value uintptr) error {
+	return m.CreateUpdateMap(key, value, uint64(BPF_NOEXIST))
 }
 
-type BPFInetTrieKey struct {
-    Prefixlen uint32
-    Addr [4]byte
+func (m *BPFMap) UpdateMapEntry(key , value uintptr) error {
+	return m.CreateUpdateMap(key, value, uint64(BPF_NOEXIST))
 }
 
-func (m *BPFMap) UpdateMap(key , value uintptr, updateFlags uint64) error {
+func (m *BPFMap) CreateUpdateMap(key , value uintptr, updateFlags uint64) error {
 
 	var log = logger.Get()
-	/*
-	attr := BpfMapAttr{
-		MapFD: uint32(m.MapFD),
-		Flags: updateFlags,
-	}
-
-	keyBytes, err := convToBytes(key, m.MapMetaData.Def.KeySize)
-	if err != nil {
-		return err
-	}
-
-	valBytes, err := convToBytes(value, m.MapMetaData.Def.ValueSize)
-	if err != nil {
-		return err
-	}
-	Key := (uintptr(unsafe.Pointer(&keyBytes[0])))
-	Value := (uintptr(unsafe.Pointer(&valBytes[0])))
-
-	attr.Key = uint64(Key)
-	attr.Value = uint64(Value)
-	*/
-	//Dummy data to test syscall
-
-	/*
-	dummykey := BPFInetTrieKey{
-		Prefixlen: 24,
-		Addr: [4]byte{192, 168, 0, 0},
-	}
-	dummyvalue := uint32(1) */
-	/*
-	keyBytes, err := convToBytes(key, m.MapMetaData.Def.KeySize)
-	if err != nil {
-		return err
-	}
-
-	valueBytes, err := convToBytes(value, m.MapMetaData.Def.ValueSize)
-	if err != nil {
-		return err
-	}*/
 
 	attr := BpfMapAttr{
 		MapFD: uint32(m.MapFD),
@@ -295,11 +233,34 @@ func (m *BPFMap) UpdateMap(key , value uintptr, updateFlags uint64) error {
 	runtime.KeepAlive(key)
 	runtime.KeepAlive(value)
 
-	if errno < 0 {
-		log.Infof("Unable to update map and ret %d and err %s", int(ret), errno)
+	if errno !=0 {
+		log.Infof("Unable to create/update map entry and ret %d and err %s", int(ret), errno)
 		return fmt.Errorf("Unable to update map: %s", errno)
 	}
 
-	log.Infof("Update map done with fd : %d and err %s", int(ret), errno)
+	log.Infof("Create/Update map entry done with fd : %d and err %s", int(ret), errno)
+	return nil
+}
+
+func (m *BPFMap) DeleteMapEntry(key uintptr) error {
+
+	var log = logger.Get()
+
+	attr := BpfMapAttr{
+		MapFD: uint32(m.MapFD),
+		Key: uint64(key),
+	}
+	ret, _, errno := unix.Syscall(
+		unix.SYS_BPF,
+		BPF_MAP_DELETE_ELEM,
+		uintptr(unsafe.Pointer(&attr)),
+		unsafe.Sizeof(attr),
+	)
+	if errno !=0 {
+		log.Infof("Unable to delete map entry and ret %d and err %s", int(ret), errno)
+		return fmt.Errorf("Unable to update map: %s", errno)
+	}
+
+	log.Infof("Delete map entry done with fd : %d and err %s", int(ret), errno)
 	return nil
 }
