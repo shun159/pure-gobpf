@@ -232,9 +232,8 @@ func convToBytes(val interface{}, size uint32) ([]byte, error) {
 }
 
 type BPFInetTrieKey struct {
-    Prefixlen uint8
+    Prefixlen uint32
     Addr [4]byte
-    Pad [3]byte
 }
 
 func (m *BPFMap) UpdateMap(key interface{}, value interface{}, updateFlags uint64) error {
