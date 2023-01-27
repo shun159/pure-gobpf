@@ -287,3 +287,26 @@ func (m *BPFMap) GetNextMapEntry(key uintptr) (uint64, error) {
 	log.Infof("Got next map entry with fd : %d and err %s", int(ret), errno)
 	return attr.Value, nil
 }
+
+func (m *BPFMap) GetMapEntry(key uintptr) (uint64, error) {
+
+	var log = logger.Get()
+
+	attr := BpfMapAttr{
+		MapFD: uint32(m.MapFD),
+		Key: uint64(key),
+	}
+	ret, _, errno := unix.Syscall(
+		unix.SYS_BPF,
+		BPF_MAP_LOOKUP_ELEM,
+		uintptr(unsafe.Pointer(&attr)),
+		unsafe.Sizeof(attr),
+	)
+	if errno !=0 {
+		log.Infof("Unable to get map entry and ret %d and err %s", int(ret), errno)
+		return 0, fmt.Errorf("Unable to get next map entry: %s", errno)
+	}
+
+	log.Infof("Got map entry with fd : %d and err %s", int(ret), errno)
+	return attr.Value, nil
+}
