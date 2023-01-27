@@ -215,3 +215,32 @@ err = goebpf.TCIngressAttach(hostVethName, progFD)
 		}
 	}
 ```
+
+### Map dump all -
+
+```
+		iterKey := BPFInetTrieKey{}
+		iterNextKey := BPFInetTrieKey{}
+
+		err = mapToUpdate.GetFirstMapEntry(uintptr(unsafe.Pointer(&iterKey)))
+		if err != nil {
+			log.Errorf("Unable to get First key: %v", err)
+		} else {
+			for {
+				var newMapVal uint32
+				err = mapToUpdate.GetMapEntry(uintptr(unsafe.Pointer(&iterKey)), uintptr(unsafe.Pointer(&newMapVal)))
+				if err != nil {
+					log.Errorf("Unable to get map entry: %v", err)
+				} else {
+					log.Infof("Found the map entry and value %d", newMapVal)
+				}
+
+				err = mapToUpdate.GetNextMapEntry(uintptr(unsafe.Pointer(&iterKey)), uintptr(unsafe.Pointer(&iterNextKey)))
+				if err != nil {
+					log.Errorf("Done searching : %v", err)
+					break
+				}
+				iterKey = iterNextKey
+			}
+		}
+```
