@@ -265,7 +265,7 @@ func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 	return nil
 }
 
-func (m *BPFMap) GetNextMapEntry(key uintptr) error {
+func (m *BPFMap) GetNextMapEntry(key uintptr) (uint64, error) {
 
 	var log = logger.Get()
 
@@ -281,9 +281,9 @@ func (m *BPFMap) GetNextMapEntry(key uintptr) error {
 	)
 	if errno !=0 {
 		log.Infof("Unable to get next map entry and ret %d and err %s", int(ret), errno)
-		return fmt.Errorf("Unable to get next map entry: %s", errno)
+		return 0, fmt.Errorf("Unable to get next map entry: %s", errno)
 	}
 
 	log.Infof("Got next map entry with fd : %d and err %s", int(ret), errno)
-	return nil
+	return attr.Value, nil
 }
