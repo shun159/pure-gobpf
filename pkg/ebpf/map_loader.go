@@ -264,3 +264,26 @@ func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 	log.Infof("Delete map entry done with fd : %d and err %s", int(ret), errno)
 	return nil
 }
+
+func (m *BPFMap) GetNextMapEntry(key uintptr) error {
+
+	var log = logger.Get()
+
+	attr := BpfMapAttr{
+		MapFD: uint32(m.MapFD),
+		Key: uint64(key),
+	}
+	ret, _, errno := unix.Syscall(
+		unix.SYS_BPF,
+		BPF_MAP_GET_NEXT_KEY,
+		uintptr(unsafe.Pointer(&attr)),
+		unsafe.Sizeof(attr),
+	)
+	if errno !=0 {
+		log.Infof("Unable to get next map entry and ret %d and err %s", int(ret), errno)
+		return fmt.Errorf("Unable to get next map entry: %s", errno)
+	}
+
+	log.Infof("Got next map entry with fd : %d and err %s", int(ret), errno)
+	return nil
+}
