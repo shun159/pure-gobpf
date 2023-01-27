@@ -265,13 +265,14 @@ func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 	return nil
 }
 
-func (m *BPFMap) GetNextMapEntry(key uintptr) (uint64, error) {
+func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 
 	var log = logger.Get()
 
 	attr := BpfMapAttr{
 		MapFD: uint32(m.MapFD),
 		Key: uint64(key),
+		Value: uint64(nextKey),
 	}
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
@@ -281,20 +282,21 @@ func (m *BPFMap) GetNextMapEntry(key uintptr) (uint64, error) {
 	)
 	if errno !=0 {
 		log.Infof("Unable to get next map entry and ret %d and err %s", int(ret), errno)
-		return 0, fmt.Errorf("Unable to get next map entry: %s", errno)
+		return fmt.Errorf("Unable to get next map entry: %s", errno)
 	}
 
 	log.Infof("Got next map entry with fd : %d and err %s", int(ret), errno)
-	return attr.Value, nil
+	return nil
 }
 
-func (m *BPFMap) GetMapEntry(key uintptr) (uint64, error) {
+func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 
 	var log = logger.Get()
 
 	attr := BpfMapAttr{
 		MapFD: uint32(m.MapFD),
 		Key: uint64(key),
+		Value: uint64(value),
 	}
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
@@ -304,9 +306,9 @@ func (m *BPFMap) GetMapEntry(key uintptr) (uint64, error) {
 	)
 	if errno !=0 {
 		log.Infof("Unable to get map entry and ret %d and err %s", int(ret), errno)
-		return 0, fmt.Errorf("Unable to get next map entry: %s", errno)
+		return fmt.Errorf("Unable to get next map entry: %s", errno)
 	}
 
 	log.Infof("Got map entry with fd : %d and err %s", int(ret), errno)
-	return attr.Value, nil
+	return nil
 }
