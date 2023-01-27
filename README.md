@@ -105,20 +105,113 @@ Retrieve the progFD for the intended program from elfcontext -
 err = goebpf.TCIngressAttach(hostVethName, progFD)
 ```
 
-## Sample example to fetch program from ELFContext - 
+## Sample example
+
+### Fetch program from ELFContext - 
 
 ```
-var elfContext *goebpfelfparser.ELFContext
-elfContext, err = goebpfelfparser.LoadBpfFile(<ELF file>)
-if err != nil {
-	log.Errorf("LoadElf() failed: %v", err)
-}
+    var elfContext *goebpfelfparser.ELFContext
+    elfContext, err = goebpfelfparser.LoadBpfFile(<ELF file>)
+    if err != nil {
+	    log.Errorf("LoadElf() failed: %v", err)
+    }
 
-for pgmName, pgmData := range elfContext.Section["xdp"].Programs {
-	log.Infof("xdp -> PgmName %s : ProgFD %d and PinPath %s", pgmName, pgmData.ProgFD, pgmData.PinPath)
-}
+    for pgmName, pgmData := range elfContext.Section["xdp"].Programs {
+	    log.Infof("xdp -> PgmName %s : ProgFD %d and PinPath %s", pgmName, pgmData.ProgFD, pgmData.PinPath)
+    }
 
-for pgmName, pgmData := range elfContext.Section["tc_cls"].Programs {
-	log.Infof("tc_cls -> PgmName %s : ProgFD %d and PinPath %s", pgmName, pgmData.ProgFD, pgmData.PinPath)
-}
+    for pgmName, pgmData := range elfContext.Section["tc_cls"].Programs {
+	    log.Infof("tc_cls -> PgmName %s : ProgFD %d and PinPath %s", pgmName, pgmData.ProgFD, pgmData.PinPath)
+    }
+```
+
+### Map operations -
+
+```
+    var elfContext *goebpfelfparser.ELFContext
+	elfContext, err = goebpfelfparser.LoadBpfFile(<ELF file>)
+	if err != nil {
+		log.Errorf("LoadElf() failed: %v", err)
+	}
+
+	for pgmName, pgmData := range elfContext.Section["xdp"].Programs {
+		log.Infof("xdp -> PgmName %s : ProgFD %d and PinPath %s", pgmName, pgmData.ProgFD, pgmData.PinPath)
+	}
+
+	for pgmName, pgmData := range elfContext.Section["tc_cls"].Programs {
+		log.Infof("tc_cls -> PgmName %s : ProgFD %d and PinPath %s", pgmName, pgmData.ProgFD, pgmData.PinPath)
+	}
+
+	for k, v := range elfContext.Maps {
+		log.Infof("Found map %s with fd %d", k, v.MapFD)
+	}
+
+	//Insert into map
+	type BPFInetTrieKey struct {
+		Prefixlen uint32
+		Addr [4]byte
+	}
+	dummykey := BPFInetTrieKey{
+		Prefixlen: 32,
+		Addr: [4]byte{192, 168, 0, 0},
+	}
+	dummyvalue := uint32(40)
+
+	dummykey2 := BPFInetTrieKey{
+		Prefixlen: 32,
+		Addr: [4]byte{192, 168, 0, 1},
+	}
+	dummyvalue2 := uint32(30)
+
+	if mapToUpdate, ok := elfContext.Maps["ingressmap"]; ok {
+		log.Infof("Found map to Create entry")
+		err = mapToUpdate.CreateMapEntry(uintptr(unsafe.Pointer((&dummykey))), uintptr(unsafe.Pointer((&dummyvalue))))
+		if err != nil {
+			log.Errorf("Unable to Insert into eBPF map: %v", err)
+		}
+		dummyvalue := uint32(20)
+
+		log.Infof("Found map to Update entry")
+		err = mapToUpdate.UpdateMapEntry(uintptr(unsafe.Pointer((&dummykey))), uintptr(unsafe.Pointer((&dummyvalue))))
+		if err != nil {
+			log.Errorf("Unable to Update into eBPF map: %v", err)
+		}
+
+		var mapVal uint32
+		log.Infof("Get map entry")
+		err := mapToUpdate.GetMapEntry(uintptr(unsafe.Pointer(&dummykey)), uintptr(unsafe.Pointer(&mapVal)))
+		if err != nil {
+			log.Errorf("Unable to get map entry: %v", err)
+		} else {
+			log.Infof("Found the map entry and value %d", mapVal)
+		}
+
+		log.Infof("Found map to Create dummy2 entry")
+		err = mapToUpdate.CreateMapEntry(uintptr(unsafe.Pointer((&dummykey2))), uintptr(unsafe.Pointer((&dummyvalue2))))
+		if err != nil {
+			log.Errorf("Unable to Insert into eBPF map: %v", err)
+		}
+
+		log.Infof("Try next key")
+		nextKey := BPFInetTrieKey{}
+		err = mapToUpdate.GetNextMapEntry(uintptr(unsafe.Pointer(&dummykey)), uintptr(unsafe.Pointer(&nextKey)))
+		if err != nil {
+			log.Errorf("Unable to get next key: %v", err)
+		} else {
+			log.Infof("Get map entry of next key")
+			var newMapVal uint32
+			err := mapToUpdate.GetMapEntry(uintptr(unsafe.Pointer(&nextKey)), uintptr(unsafe.Pointer(&newMapVal)))
+			if err != nil {
+				log.Errorf("Unable to get next map entry: %v", err)
+			} else {
+				log.Infof("Found the next map entry and value %d", newMapVal)
+			}
+		}
+
+		log.Infof("Found map to Delete entry")
+		err = mapToUpdate.DeleteMapEntry(uintptr(unsafe.Pointer((&dummykey))))
+		if err != nil {
+			log.Errorf("Unable to Delete in eBPF map: %v", err)
+		}
+	}
 ```
