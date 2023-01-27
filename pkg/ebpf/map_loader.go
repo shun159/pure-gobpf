@@ -265,6 +265,11 @@ func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 	return nil
 }
 
+// To get the first entry pass key as `nil`
+func (m *BPFMap) GetFirstMapEntry(nextKey uintptr) error {
+	return m.GetNextMapEntry(uintptr(unsafe.Pointer(nil)), nextKey)
+}
+
 func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 
 	var log = logger.Get()
