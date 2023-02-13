@@ -123,3 +123,45 @@ func LoadProg(progType string, data []byte, licenseStr string, pinPath string) (
 	}
 	return int(fd), nil
 }
+
+func (p *BPFProgram) UpdateMapEntry(key uintptr, value uintptr, mapFD uint32) error {
+	var log = logger.Get()
+
+	attr := BpfMapAttr{
+		MapFD: mapFD,
+		Flags: uint64(BPF_NOEXIST),
+		Key: uint64(key),
+		Value: uint64(value),
+	}
+	ret, _, errno := unix.Syscall(
+		unix.SYS_BPF,
+		BPF_MAP_UPDATE_ELEM,
+		uintptr(unsafe.Pointer(&attr)),
+		unsafe.Sizeof(attr),
+	)
+	runtime.KeepAlive(key)
+	runtime.KeepAlive(value)
+
+	if errno !=0 {
+		log.Infof("Unable to update map entry and ret %d and err %s", int(ret), errno)
+		return fmt.Errorf("Unable to update map: %s", errno)
+	}
+
+	log.Infof("Update map entry done with fd : %d and err %s", int(ret), errno)
+	return nil
+
+}
+
+func (p *BPFProgram) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr, mapFD uint32) error {
+	var log = logger.Get()
+	for k, v := range keyvalue {
+		err := p.UpdateMapEntry(k, v, mapFD)
+		if err != nil {
+			log.Infof("One of the element update failed hence returning from bulk update")
+			return err
+		}
+	}
+	log.Info("Bulk update is successful for mapFD: %d", int(mapFD))
+	return nil
+}
+

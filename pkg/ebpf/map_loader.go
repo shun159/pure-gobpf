@@ -235,7 +235,7 @@ func (m *BPFMap) CreateUpdateMap(key , value uintptr, updateFlags uint64) error 
 
 	if errno !=0 {
 		log.Infof("Unable to create/update map entry and ret %d and err %s", int(ret), errno)
-		return fmt.Errorf("Unable to update map: %s", errno)
+		return fmt.Errorf("Unable to create/update map: %s", errno)
 	}
 
 	log.Infof("Create/Update map entry done with fd : %d and err %s", int(ret), errno)
