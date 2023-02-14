@@ -8,6 +8,31 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+func enableQdisc(link netlink.Link) bool {
+	var log = logger.Get()
+	log.Infof("Check if qdisc has to be enabled")
+	qdiscs, err := netlink.QdiscList(link)
+	if err != nil {
+		log.Infof("Unable to check qdisc hence try installing")
+		return true 
+	}
+
+	qdiscHandle := netlink.MakeHandle(0xffff, 0)
+	for _, qdisc := range qdiscs {
+		attrs := qdisc.Attrs()
+		if attrs.LinkIndex != link.Attrs().Index {
+			continue
+		}
+		if (attrs.Handle & qdiscHandle) == qdiscHandle && attrs.Parent == netlink.HANDLE_INGRESS {
+			log.Infof("Found qdisc hence don't install again")
+			return false
+		}
+	}
+	log.Infof("Qdisc is not enabled hence install")
+	return true
+
+}
+
 func TCIngressAttach(interfaceName string, progFD int) error {
 	var log = logger.Get()
 	intf, err := netlink.LinkByName(interfaceName)
@@ -22,14 +47,16 @@ func TCIngressAttach(interfaceName string, progFD int) error {
 		Parent:    netlink.HANDLE_INGRESS,
 	}
 
-	qdisc := &netlink.GenericQdisc{
-		QdiscAttrs: attrs,
-		QdiscType:  "clsact",
-	}
+	if (enableQdisc(intf)) {
+		qdisc := &netlink.GenericQdisc{
+			QdiscAttrs: attrs,
+			QdiscType:  "clsact",
+		}
 
-	if err := netlink.QdiscAdd(qdisc); err != nil {
-		log.Infof("Cannot add clsact")
-		return fmt.Errorf("cannot add clsact qdisc: %v", err)
+		if err := netlink.QdiscAdd(qdisc); err != nil {
+			log.Infof("Cannot add clsact")
+			return fmt.Errorf("cannot add clsact qdisc: %v", err)
+		}
 	}
 
 	// construct the filter
@@ -68,14 +95,16 @@ func TCEgressAttach(interfaceName string, progFD int) error {
 		Parent:    netlink.HANDLE_INGRESS,
 	}
 
-	qdisc := &netlink.GenericQdisc{
-		QdiscAttrs: attrs,
-		QdiscType:  "clsact",
-	}
+	if (enableQdisc(intf)) {
+		qdisc := &netlink.GenericQdisc{
+			QdiscAttrs: attrs,
+			QdiscType:  "clsact",
+		}
 
-	if err := netlink.QdiscAdd(qdisc); err != nil {
-		log.Infof("Cannot add clsact")
-		return fmt.Errorf("cannot add clsact qdisc: %v", err)
+		if err := netlink.QdiscAdd(qdisc); err != nil {
+			log.Infof("Cannot add clsact")
+			return fmt.Errorf("cannot add clsact qdisc: %v", err)
+		}
 	}
 
 	// construct the filter
