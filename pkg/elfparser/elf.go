@@ -36,21 +36,28 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/jayanthvn/pure-gobpf/pkg/ebpf"
+	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
+	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_progs"
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 )
 
 //Ref:https://github.com/torvalds/linux/blob/v5.10/samples/bpf/bpf_load.c
+type BPFParser struct {
+	bpfMapAPIs  ebpf_maps.APIs
+	bpfProgAPIs ebpf_progs.APIs
+	elfContext  ELFContext
+}
+
 type ELFContext struct {
 	// .elf will have multiple sections and maps
-	Section map[string]ELFSection  // Indexed by section type
-	Maps    map[string]ebpf.BPFMap // Index by map name
+	Section map[string]ELFSection       // Indexed by section type
+	Maps    map[string]ebpf_maps.BPFMap // Index by map name
 }
 
 type ELFSection struct {
 	// Each sections will have a program but a single section type can have multiple programs
 	// like tc_cls
-	Programs map[string]ebpf.BPFProgram // Index by program name
+	Programs map[string]ebpf_progs.BPFProgram // Index by program name
 }
 
 //https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L71
@@ -87,7 +94,15 @@ func LoadBpfFile(path string) (*ELFContext, error) {
 	}
 	defer f.Close()
 
-	return doLoadELF(f)
+	c := &BPFParser{}
+	c.bpfMapAPIs, _ = ebpf_maps.New(log, "/sys/fs/bpf/", "globals")
+	c.bpfProgAPIs, _ = ebpf_progs.New(log, "/sys/fs/bpf/", "globals")
+	c.elfContext = ELFContext{}
+	err = c.doLoadELF(f)
+	if err != nil {
+		return nil, err
+	}
+	return &c.elfContext, nil
 }
 
 func NullTerminatedStringToString(val []byte) string {
@@ -102,11 +117,11 @@ func NullTerminatedStringToString(val []byte) string {
 	return string(val[:slen])
 }
 
-func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File) error {
+func (c *BPFParser) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File) error {
 	var log = logger.Get()
 	//Replace this TODO
 	mapDefinitionSize := C.BPF_MAP_DEF_SIZE
-	GlobalMapData := []ebpf.BpfMapData{}
+	GlobalMapData := []ebpf_maps.BpfMapData{}
 
 	data, err := dataMaps.Data()
 	if err != nil {
@@ -124,8 +139,8 @@ func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, el
 
 	for offset := 0; offset < len(data); offset += mapDefinitionSize {
 		log.Infof("Offset %d", offset)
-		mapData := ebpf.BpfMapData{}
-		mapDef := ebpf.BpfMapDef{
+		mapData := ebpf_maps.BpfMapData{}
+		mapDef := ebpf_maps.BpfMapDef{
 			Type:       uint32(binary.LittleEndian.Uint32(data[offset : offset+4])),
 			KeySize:    uint32(binary.LittleEndian.Uint32(data[offset+4 : offset+8])),
 			ValueSize:  uint32(binary.LittleEndian.Uint32(data[offset+8 : offset+12])),
@@ -155,13 +170,9 @@ func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, el
 	for index := 0; index < len(GlobalMapData); index++ {
 		log.Infof("Loading maps")
 		loadedMaps := GlobalMapData[index]
-		bpfMap := ebpf.BPFMap{
-			MapFD:       0,
-			MapMetaData: loadedMaps,
-		}
 
-		mapFD, _ := bpfMap.CreateMap()
-		if mapFD == -1 {
+		bpfMap, err := c.bpfMapAPIs.CreateMap(loadedMaps)
+		if err != nil {
 			//Even if one map fails, we error out
 			log.Infof("Failed to create map, continue to next map..just for debugging")
 			continue
@@ -169,11 +180,9 @@ func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, el
 
 		mapNameStr := loadedMaps.Name
 		pinPath := "/sys/fs/bpf/globals/" + mapNameStr
-		bpfMap.PinMap(mapFD, pinPath)
+		c.bpfMapAPIs.PinMap(bpfMap, pinPath)
 
-		bpfMap.MapFD = uint32(mapFD)
-
-		c.Maps[mapNameStr] = bpfMap
+		c.elfContext.Maps[mapNameStr] = bpfMap
 	}
 	return nil
 }
@@ -233,7 +242,7 @@ func parseRelocationSection(reloSection *elf.Section, elfFile *elf.File) ([]relo
 	}
 }
 
-func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, sectionIndex int, elfFile *elf.File) error {
+func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, sectionIndex int, elfFile *elf.File) error {
 	var log = logger.Get()
 
 	insDefSize := uint64(C.BPF_INS_DEF_SIZE)
@@ -289,7 +298,7 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 		// BPF_MEM | <size> | BPF_ST:   *(size *) (dst_reg + off) = imm32
 		mapName := relocationEntry.symbol.Name
 		log.Infof("Map to be relocated; Name: %s", mapName)
-		if progMap, ok := c.Maps[mapName]; ok {
+		if progMap, ok := c.elfContext.Maps[mapName]; ok {
 			log.Infof("Map found. Replace the offset with corresponding Map FD: %v", progMap.MapFD)
 			ebpfInstruction.SrcReg = 1 //dummy value for now
 			ebpfInstruction.Imm = int32(progMap.MapFD)
@@ -303,7 +312,7 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 		}
 	}
 
-	var pgmList = make(map[string]ebpf.BPFProgram)
+	var pgmList = make(map[string]ebpf_progs.BPFProgram)
 	// Iterate over the symbols in the symbol table
 	for _, symbol := range symbolTable {
 		// Check if the symbol is a function
@@ -335,13 +344,13 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 					log.Infof("Program Data size - %d", len(programData))
 
 					pinPath := "/sys/fs/bpf/globals/" + ProgName
-					progFD, _ := ebpf.LoadProg(progType, programData, license, pinPath)
+					progFD, _ := c.bpfProgAPIs.LoadProg(progType, programData, license, pinPath)
 					if progFD == -1 {
 						log.Infof("Failed to load prog")
 						return fmt.Errorf("Failed to Load the prog")
 					}
 					log.Infof("loaded prog with %d", progFD)
-					pgmList[ProgName] = ebpf.BPFProgram{
+					pgmList[ProgName] = ebpf_progs.BPFProgram{
 						ProgFD:  progFD,
 						PinPath: pinPath,
 					}
@@ -352,24 +361,23 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 			}
 		}
 	}
-	c.Section[progType] = ELFSection{
+	c.elfContext.Section[progType] = ELFSection{
 		Programs: pgmList,
 	}
 
 	return nil
 }
 
-func doLoadELF(r io.ReaderAt) (*ELFContext, error) {
+func (c *BPFParser) doLoadELF(r io.ReaderAt) error {
 	var log = logger.Get()
 	var err error
 	elfFile, err := elf.NewFile(r)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	c := &ELFContext{}
-	c.Section = make(map[string]ELFSection)
-	c.Maps = make(map[string]ebpf.BPFMap)
+	c.elfContext.Section = make(map[string]ELFSection)
+	c.elfContext.Maps = make(map[string]ebpf_maps.BPFMap)
 	reloSectionMap := make(map[uint32]*elf.Section)
 
 	var dataMaps *elf.Section
@@ -380,7 +388,7 @@ func doLoadELF(r io.ReaderAt) (*ELFContext, error) {
 		if section.Name == "license" {
 			data, _ := section.Data()
 			if err != nil {
-				return nil, fmt.Errorf("Failed to read data for section %s", section.Name)
+				return fmt.Errorf("Failed to read data for section %s", section.Name)
 			}
 			license = string(data)
 			log.Infof("License %s", license)
@@ -396,7 +404,7 @@ func doLoadELF(r io.ReaderAt) (*ELFContext, error) {
 	if dataMaps != nil {
 		err := c.loadElfMapsSection(mapsShndx, dataMaps, elfFile)
 		if err != nil {
-			return nil, nil
+			return nil
 		}
 	}
 
@@ -426,9 +434,9 @@ func doLoadELF(r io.ReaderAt) (*ELFContext, error) {
 		err = c.loadElfProgSection(dataProg, reloSectionMap[uint32(sectionIndex)], license, progType, sectionIndex, elfFile)
 		if err != nil {
 			log.Infof("Failed to load the prog")
-			return nil, fmt.Errorf("Failed to load prog %q - %v", dataProg.Name, err)
+			return fmt.Errorf("Failed to load prog %q - %v", dataProg.Name, err)
 		}
 	}
 
-	return c, nil
+	return nil
 }

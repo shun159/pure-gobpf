@@ -1,2 +1,4 @@
 bpf-sdk
 .idea
+test/
+coverage.txt

@@ -11,7 +11,10 @@ type Logger struct {
 	*logrus.Logger
 }
 
-const LOG_FILE = "/var/log/aws-routed-eni/ebpf-sdk.log"
+const (
+	defaultLogFilePath = "/var/log/aws-routed-eni/ebpf-sdk.log"
+	envLogFilePath     = "AWS_EBPF_SDK_LOG_FILE"
+)
 
 var log *Logger
 
@@ -23,10 +26,15 @@ func Get() *Logger {
 }
 
 func New() *Logger {
-	f, err := os.OpenFile(LOG_FILE, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Println("Failed to create logfile" + LOG_FILE)
-		panic(err)
+	logFile := GetLogLocation()
+	f := os.Stdout
+	var err error
+	if logFile != "stdout" {
+		f, err = os.OpenFile(logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Failed to create logfile" + logFile)
+			panic(err)
+		}
 	}
 
 	var baseLogger = logrus.New()
@@ -36,4 +44,12 @@ func New() *Logger {
 	standardLogger.SetOutput(f)
 	standardLogger.Info("Constructed new logger instance")
 	return standardLogger
+}
+
+func GetLogLocation() string {
+	logFilePath := os.Getenv(envLogFilePath)
+	if logFilePath == "" {
+		logFilePath = defaultLogFilePath
+	}
+	return logFilePath
 }
