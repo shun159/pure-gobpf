@@ -3,7 +3,7 @@ package ebpf
 import (
 	"fmt"
 	"os"
-	//"syscall"
+	"syscall"
 	"unsafe"
 	"strings"
 	"strconv"
@@ -112,4 +112,27 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 	
 	return nil
 
+}
+
+func KprobeDetatch(eventName string) error {
+	var log = logger.Get()
+	kprobeSysEventsFile := "/sys/kernel/debug/tracing/kprobe_events"
+	file, err := os.OpenFile(kprobeSysEventsFile, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		log.Infof("Cannot open file to detach")
+		return fmt.Errorf("cannot open kprobe events: %v", err)
+	}
+	defer file.Close()
+	
+	eventString := fmt.Sprintf("-:%s\n", eventName)
+	if _, err = file.WriteString(eventString); err != nil {
+		pathErr, ok := err.(*os.PathError)
+		if ok && pathErr.Err == syscall.ENOENT {
+			log.Infof("File is already cleanedup, maybe some other process?")
+			return nil
+		}
+		log.Infof("Cannot update the kprobe events %v", err)
+		return fmt.Errorf("cannot update the kprobe_events: %v", err)
+	}
+	return nil
 }
