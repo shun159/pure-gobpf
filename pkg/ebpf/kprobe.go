@@ -114,7 +114,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 
 }
 
-func KprobeDetatch(eventName string) error {
+func KprobeDetach(eventName string) error {
 	var log = logger.Get()
 	log.Infof("Calling Detach on %s", eventName)
 	kprobeSysEventsFile := "/sys/kernel/debug/tracing/kprobe_events"
