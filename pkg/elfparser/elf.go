@@ -251,8 +251,11 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 		return err
 	}
 
-	log.Infof("Loading Program with relocation section; Info:%v; Name: %s, Type: %s; Size: %v", reloSection.Info,
+	//TODO : kprobe check is temp until we fix realloc null issue
+	if progType != "kprobe" {
+		log.Infof("Loading Program with relocation section; Info:%v; Name: %s, Type: %s; Size: %v", reloSection.Info,
 		reloSection.Name, reloSection.Type, reloSection.Size)
+	}
 
 	//Single section might have multiple programs. So we retrieve one prog at a time and load.
 	symbolTable, err := elfFile.Symbols()
@@ -261,6 +264,8 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 		return fmt.Errorf("get symbols: %w", err)
 	}
 
+	//TODO : kprobe check is temp until we fix realloc null issue
+	if progType != "kprobe" {
 	relocationEntries, err := parseRelocationSection(reloSection, elfFile)
 	if err != nil || len(relocationEntries) == 0 {
 		return fmt.Errorf("Unable to parse relocation entries....")
@@ -310,6 +315,7 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 		} else {
 			return fmt.Errorf("map '%s' doesn't exist", mapName)
 		}
+	}
 	}
 
 	var pgmList = make(map[string]ebpf_progs.BPFProgram)
