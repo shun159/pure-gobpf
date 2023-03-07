@@ -109,13 +109,14 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		panic(err)
 	}
 	*/
-	
+	log.Infof("Attach done!!!")
 	return nil
 
 }
 
 func KprobeDetatch(eventName string) error {
 	var log = logger.Get()
+	log.Infof("Calling Detach on %s", eventName)
 	kprobeSysEventsFile := "/sys/kernel/debug/tracing/kprobe_events"
 	file, err := os.OpenFile(kprobeSysEventsFile, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
@@ -134,5 +135,6 @@ func KprobeDetatch(eventName string) error {
 		log.Infof("Cannot update the kprobe events %v", err)
 		return fmt.Errorf("cannot update the kprobe_events: %v", err)
 	}
+	log.Infof("Detach done!!!")
 	return nil
 }
