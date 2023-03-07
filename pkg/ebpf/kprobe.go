@@ -82,15 +82,17 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 	}
 	defer unix.Close(fd)
 
+	
 	log.Infof("Attach bpf program to perf event Prog FD %d Event FD %d", progFD, fd)
-	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.PERF_EVENT_IOC_SET_BPF, uintptr(progFD)); err != 0 {
+	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(fd)), uintptr(uint(unix.PERF_EVENT_IOC_SET_BPF)), uintptr(progFD)); err != 0 {
 		log.Infof("error attaching bpf program to perf event: %v", err)
 		return fmt.Errorf("error attaching bpf program to perf event: %v", err)
 	}
-	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.PERF_EVENT_IOC_ENABLE, 0); err != 0 {
+	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(fd)), uintptr(uint(unix.PERF_EVENT_IOC_ENABLE)), 0); err != 0 {
 		log.Infof("error enabling perf event: %v", err)
 		return fmt.Errorf("error enabling perf event: %v", err)
 	}
+	
 
 	/*
 	probeAttachAttr := unix.BpfProgAttachAttr{
@@ -107,8 +109,8 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 	err = unix.IoctlSetInt(fd, unix.PERF_EVENT_IOC_ENABLE, 0)
 	if err != nil {
 		panic(err)
-	}
-	*/
+	}*/
+	
 	log.Infof("Attach done!!!")
 	return nil
 
