@@ -57,6 +57,8 @@ type BPFProgram struct {
 	// return program name, prog FD and pinPath
 	ProgFD  int
 	PinPath string
+	ProgType string
+	SubProgType string
 }
 
 func mount_bpf_fs() error {
@@ -110,6 +112,8 @@ func (m *BpfProgApi) LoadProg(progType string, data []byte, licenseStr string, p
 		prog_type = uint32(netlink.BPF_PROG_TYPE_SCHED_CLS)
 	case "tc_act":
 		prog_type = uint32(netlink.BPF_PROG_TYPE_SCHED_ACT)
+	case "kprobe":
+		prog_type = uint32(netlink.BPF_PROG_TYPE_KPROBE)		
 	default:
 		prog_type = uint32(netlink.BPF_PROG_TYPE_UNSPEC)
 	}

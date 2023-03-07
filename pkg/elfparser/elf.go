@@ -85,7 +85,7 @@ type relocationEntry struct {
 	symbol    elf.Symbol
 }
 
-func LoadBpfFile(path string) (*ELFContext, error) {
+func LoadBpfFile(path string) (*BPFParser, error) {
 	var log = logger.Get()
 	f, err := os.Open(path)
 	if err != nil {
@@ -102,7 +102,7 @@ func LoadBpfFile(path string) (*ELFContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &c.elfContext, nil
+	return c, nil
 }
 
 func NullTerminatedStringToString(val []byte) string {
@@ -242,7 +242,7 @@ func parseRelocationSection(reloSection *elf.Section, elfFile *elf.File) ([]relo
 	}
 }
 
-func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, sectionIndex int, elfFile *elf.File) error {
+func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, subProgType string, sectionIndex int, elfFile *elf.File) error {
 	var log = logger.Get()
 
 	insDefSize := uint64(C.BPF_INS_DEF_SIZE)
@@ -353,6 +353,8 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 					pgmList[ProgName] = ebpf_progs.BPFProgram{
 						ProgFD:  progFD,
 						PinPath: pinPath,
+						ProgType: progType,
+						SubProgType: subProgType,
 					}
 				} else {
 					log.Infof("Invalid ELF file\n")
@@ -424,14 +426,20 @@ func (c *BPFParser) doLoadELF(r io.ReaderAt) error {
 		}
 
 		log.Infof("Found PROG Section at Index %v", sectionIndex)
-		progType := strings.ToLower(strings.Split(section.Name, "/")[0])
+		splitProgType := strings.Split(section.Name, "/")
+		progType := strings.ToLower(splitProgType[0])
+		var subProgType string 
+		if len(splitProgType) == 2 {
+			subProgType = strings.ToLower(splitProgType[1])
+			log.Infof("Found subprog type %s", subProgType)
+		}
 		log.Infof("Found the progType %s", progType)
-		if progType != "xdp" && progType != "tc_cls" && progType != "tc_act" {
+		if progType != "xdp" && progType != "tc_cls" && progType != "tc_act" && progType != "kprobe"{
 			log.Infof("Not supported program %s", progType)
 			continue
 		}
 		dataProg := section
-		err = c.loadElfProgSection(dataProg, reloSectionMap[uint32(sectionIndex)], license, progType, sectionIndex, elfFile)
+		err = c.loadElfProgSection(dataProg, reloSectionMap[uint32(sectionIndex)], license, progType, subProgType, sectionIndex, elfFile)
 		if err != nil {
 			log.Infof("Failed to load the prog")
 			return fmt.Errorf("Failed to load prog %q - %v", dataProg.Name, err)
