@@ -59,6 +59,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 	id := strings.TrimSpace(string(data))
 	eventID := strconv.Atoi(id)
 */
+	log.Infof("Got eventID %d", eventID)
 	// Open the perf event
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_TRACEPOINT,
@@ -81,6 +82,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 	}
 	defer unix.Close(fd)
 
+	log.Infof("Attach bpf program to perf event Prog FD %d Event FD %d", progFD, fd)
 	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.PERF_EVENT_IOC_SET_BPF, uintptr(progFD)); err != 0 {
 		log.Infof("error attaching bpf program to perf event: %v", err)
 		return fmt.Errorf("error attaching bpf program to perf event: %v", err)
