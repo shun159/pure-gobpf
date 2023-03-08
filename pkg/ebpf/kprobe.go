@@ -146,7 +146,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		return fmt.Errorf("error enabling perf event: %w", err)
 	}*/
 	
-	log.Infof("Attach done!!!")
+	log.Infof("Attach done!!! %d", retFD)
 	return nil
 
 }
