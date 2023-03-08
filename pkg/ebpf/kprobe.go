@@ -1,5 +1,37 @@
 package ebpf
+/*
+	#include <linux/perf_event.h>
+	#include <linux/version.h>
+	#include <sys/syscall.h>
+	#define SYSCALL(...) syscall(__VA_ARGS__)
+	#include <unistd.h>
+	#include <sys/ioctl.h>
+	//#include "bpf_helpers.h"
 
+	static int kprobe_perf_event_open(int progFd, long id) {
+		struct perf_event_attr attr = {};
+		attr.config = id;
+		attr.type = PERF_TYPE_TRACEPOINT;
+		attr.sample_period = 1;
+		attr.wakeup_events = 1;
+		int pfd = SYSCALL(__NR_perf_event_open, &attr, -1, 0, -1, PERF_FLAG_FD_CLOEXEC);
+		if (pfd < 0) {
+			//fprintf(stderr, "perf_event_open(%s/id): %s\n", event_path,
+			//strerror(errno));
+			return -1;
+		}
+		if (ioctl(pfd, PERF_EVENT_IOC_SET_BPF, progFd) < 0) {
+			//perror("ioctl(PERF_EVENT_IOC_SET_BPF)");
+			return -2;
+		}
+		if (ioctl(pfd, PERF_EVENT_IOC_ENABLE, 0) < 0) {
+			//perror("ioctl(PERF_EVENT_IOC_ENABLE)");
+			return -3;
+		}
+		return pfd;
+	}
+*/
+import "C"
 import (
 	"fmt"
 	"os"
@@ -9,7 +41,7 @@ import (
 	"strconv"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
-	"golang.org/x/sys/unix"
+	//"golang.org/x/sys/unix"
 )
 
 // if event is nil, we pick funcName
@@ -51,6 +83,14 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 	}
 	
 	log.Infof("Got eventID %d", eventID)
+
+	//TEMP FIX
+
+	retFD := int(C.kprobe_perf_event_open(C.int(progFD), C.long(eventID)))
+	if retFD < 0 {
+		return fmt.Errorf("kprobe_perf_event_open error %d", retFD)
+	}
+
 	/*
 	// Open the perf event
 	attr := unix.PerfEventAttr{
@@ -80,6 +120,8 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		return fmt.Errorf("error enabling perf event: %v", err)
 	}
 	*/
+
+	/*
 	attr := unix.PerfEventAttr{}
 	attr.Type, err = kprobePerfType()
 	if err != nil {
@@ -102,9 +144,9 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(efd), unix.PERF_EVENT_IOC_ENABLE, 0); err != 0 {
 		log.Infof("error enabling perf event: %w", err)
 		return fmt.Errorf("error enabling perf event: %w", err)
-	}
+	}*/
 	
-	log.Infof("Attach done!!! %d", efd)
+	log.Infof("Attach done!!!")
 	return nil
 
 }
