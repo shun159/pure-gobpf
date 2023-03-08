@@ -85,14 +85,16 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 	log.Infof("Got eventID %d", eventID)
 
 	//TEMP FIX
-
+        /*
 	retFD := int(C.kprobe_perf_event_open(C.int(progFD), C.long(eventID)))
 	if retFD < 0 {
 		return fmt.Errorf("kprobe_perf_event_open error %d", retFD)
 	}
+	*/
 
 	
 	// Open the perf event
+	/*
 	testeventString := fmt.Sprintf("p:kprobes/%s %s", "test", funcName)
 	_, err = file.WriteString(testeventString)
 	if err != nil {
@@ -113,14 +115,14 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		log.Infof("Invalid ID during parsing: %s - %v", testid, err)
 		return fmt.Errorf("Invalid ID during parsing: %s - %w", testid, err)
 	}
-	
-	log.Infof("Got eventID %d", testeventID)
+	*/
+	log.Infof("Got eventID %d", eventID)
 
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_TRACEPOINT,
 		Sample:      1,
 		Wakeup:      1,
-		Config:      uint64(testeventID),
+		Config:      uint64(eventID),
 	}
 	attr.Size = uint32(unsafe.Sizeof(attr))
 
@@ -132,7 +134,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 	defer unix.Close(fd)
 	log.Infof("Unix call returned FD %d", fd)
 
-	/*
+	
 	log.Infof("Attach bpf program to perf event Prog FD %d Event FD %d", progFD, fd)
 	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(fd)), uintptr(uint(unix.PERF_EVENT_IOC_SET_BPF)), uintptr(progFD)); err != 0 {
 		log.Infof("error attaching bpf program to perf event: %v", err)
@@ -142,7 +144,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		log.Infof("error enabling perf event: %v", err)
 		return fmt.Errorf("error enabling perf event: %v", err)
 	}
-	*/
+	
 
 	/*
 	attr := unix.PerfEventAttr{}
@@ -169,7 +171,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		return fmt.Errorf("error enabling perf event: %w", err)
 	}*/
 	
-	log.Infof("Attach done!!! %d", retFD)
+	log.Infof("Attach done!!! %d", fd)
 	return nil
 
 }
