@@ -90,7 +90,7 @@ func TCIngressDetach(interfaceName string) error {
 	}
 
 	//Currently supports only one handle, in future we might need to cache the handle
-	filterHandle := uint32(0x1) 
+	filterHandle := uint32(0x1)
 	filterParent := uint32(netlink.HANDLE_MIN_INGRESS)
 
 	filters, err := netlink.FilterList(intf, filterParent)
@@ -105,6 +105,7 @@ func TCIngressDetach(interfaceName string) error {
 			if err != nil {
 				return fmt.Errorf("Delete filter failed on intf %s : %v", interfaceName, err)
 			}
+			log.Infof("TC filter detach done")
 			return nil
 		}
 	}
@@ -168,7 +169,7 @@ func TCEgressDetach(interfaceName string) error {
 	}
 
 	//Currently supports only one handle, in future we might need to cache the handle
-	filterHandle := uint32(0x1) 
+	filterHandle := uint32(0x1)
 	filterParent := uint32(netlink.HANDLE_MIN_EGRESS)
 
 	filters, err := netlink.FilterList(intf, filterParent)
@@ -183,6 +184,7 @@ func TCEgressDetach(interfaceName string) error {
 			if err != nil {
 				return fmt.Errorf("Delete filter failed on intf %s : %v", interfaceName, err)
 			}
+			log.Infof("TC filter detach done")
 			return nil
 		}
 	}
