@@ -3,10 +3,10 @@ package ebpf
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"syscall"
 	"unsafe"
-	"strings"
-	"strconv"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 	"golang.org/x/sys/unix"
@@ -26,7 +26,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		return fmt.Errorf("Invalid BPF prog FD %d", progFD)
 
 	}
-	
+
 	if len(eventName) == 0 {
 		eventName = funcName
 	}
@@ -35,15 +35,15 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 	file, err := os.OpenFile(kprobeSysEventsFile, os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
 		log.Infof("error opening kprobe_events file: %v", err)
-	    	return fmt.Errorf("error opening kprobe_events file: %v", err)
+		return fmt.Errorf("error opening kprobe_events file: %v", err)
 	}
 	defer file.Close()
-   
+
 	eventString := fmt.Sprintf("p:kprobes/%s %s", eventName, funcName)
 	_, err = file.WriteString(eventString)
 	if err != nil {
 		log.Infof("error writing to kprobe_events file: %v", err)
-	    	return fmt.Errorf("error writing to kprobe_events file: %v", err)
+		return fmt.Errorf("error writing to kprobe_events file: %v", err)
 	}
 
 	//Get the Kprobe ID
@@ -59,14 +59,14 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		log.Infof("Invalid ID during parsing: %s - %v", id, err)
 		return fmt.Errorf("Invalid ID during parsing: %s - %w", id, err)
 	}
-	
+
 	log.Infof("Got eventID %d", eventID)
 
 	attr := unix.PerfEventAttr{
-		Type:        unix.PERF_TYPE_TRACEPOINT,
-		Sample:      1,
-		Wakeup:      1,
-		Config:      uint64(eventID),
+		Type:   unix.PERF_TYPE_TRACEPOINT,
+		Sample: 1,
+		Wakeup: 1,
+		Config: uint64(eventID),
 	}
 	attr.Size = uint32(unsafe.Sizeof(attr))
 
@@ -76,7 +76,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		return fmt.Errorf("Failed to open perf event %v", err)
 	}
 	defer unix.Close(fd)
-	
+
 	log.Infof("Attach bpf program to perf event Prog FD %d Event FD %d", progFD, fd)
 
 	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(fd)), uintptr(uint(unix.PERF_EVENT_IOC_SET_BPF)), uintptr(progFD)); err != 0 {
@@ -88,7 +88,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		log.Infof("error enabling perf event: %v", err)
 		return fmt.Errorf("error enabling perf event: %v", err)
 	}
-	
+
 	log.Infof("Attach done!!! %d", fd)
 	return nil
 
@@ -103,7 +103,7 @@ func KprobeDetach(eventName string) error {
 		return fmt.Errorf("cannot open kprobe events: %v", err)
 	}
 	defer file.Close()
-	
+
 	eventString := fmt.Sprintf("-:%s\n", eventName)
 	if _, err = file.WriteString(eventString); err != nil {
 		pathErr, ok := err.(*os.PathError)

@@ -254,7 +254,7 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 	//TODO : kprobe check is temp until we fix realloc null issue
 	if progType != "kprobe" {
 		log.Infof("Loading Program with relocation section; Info:%v; Name: %s, Type: %s; Size: %v", reloSection.Info,
-		reloSection.Name, reloSection.Type, reloSection.Size)
+			reloSection.Name, reloSection.Type, reloSection.Size)
 	}
 
 	//Single section might have multiple programs. So we retrieve one prog at a time and load.
@@ -266,56 +266,56 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 
 	//TODO : kprobe check is temp until we fix realloc null issue
 	if progType != "kprobe" {
-	relocationEntries, err := parseRelocationSection(reloSection, elfFile)
-	if err != nil || len(relocationEntries) == 0 {
-		return fmt.Errorf("Unable to parse relocation entries....")
-	}
-
-	log.Infof("Applying Relocations..")
-	for _, relocationEntry := range relocationEntries {
-		if relocationEntry.relOffset >= len(data) {
-			return fmt.Errorf("Invalid offset for the relocation entry %d", relocationEntry.relOffset)
+		relocationEntries, err := parseRelocationSection(reloSection, elfFile)
+		if err != nil || len(relocationEntries) == 0 {
+			return fmt.Errorf("Unable to parse relocation entries....")
 		}
 
-		//eBPF has one 16-byte instruction: BPF_LD | BPF_DW | BPF_IMM which consists
-		//of two consecutive 'struct bpf_insn' 8-byte blocks and interpreted as single
-		//instruction that loads 64-bit immediate value into a dst_reg.
-		//Ref: https://www.kernel.org/doc/Documentation/networking/filter.txt
-		ebpfInstruction := &BPFInsn{
-			Code:   data[relocationEntry.relOffset],
-			DstReg: data[relocationEntry.relOffset+1] & 0xf,
-			SrcReg: data[relocationEntry.relOffset+1] >> 4,
-			Off:    int16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:])),
-			Imm:    int32(binary.LittleEndian.Uint32(data[relocationEntry.relOffset+4:])),
-		}
+		log.Infof("Applying Relocations..")
+		for _, relocationEntry := range relocationEntries {
+			if relocationEntry.relOffset >= len(data) {
+				return fmt.Errorf("Invalid offset for the relocation entry %d", relocationEntry.relOffset)
+			}
 
-		log.Infof("BPF Instruction code: %s; offset: %d; imm: %d", ebpfInstruction.Code, ebpfInstruction.Off, ebpfInstruction.Imm)
+			//eBPF has one 16-byte instruction: BPF_LD | BPF_DW | BPF_IMM which consists
+			//of two consecutive 'struct bpf_insn' 8-byte blocks and interpreted as single
+			//instruction that loads 64-bit immediate value into a dst_reg.
+			//Ref: https://www.kernel.org/doc/Documentation/networking/filter.txt
+			ebpfInstruction := &BPFInsn{
+				Code:   data[relocationEntry.relOffset],
+				DstReg: data[relocationEntry.relOffset+1] & 0xf,
+				SrcReg: data[relocationEntry.relOffset+1] >> 4,
+				Off:    int16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:])),
+				Imm:    int32(binary.LittleEndian.Uint32(data[relocationEntry.relOffset+4:])),
+			}
 
-		//Validate for Invalid BPF instructions
-		if ebpfInstruction.Code != (unix.BPF_LD | unix.BPF_IMM | unix.BPF_DW) {
-			return fmt.Errorf("Invalid BPF instruction (at %d): %d",
-				relocationEntry.relOffset, ebpfInstruction.Code)
-		}
+			log.Infof("BPF Instruction code: %s; offset: %d; imm: %d", ebpfInstruction.Code, ebpfInstruction.Off, ebpfInstruction.Imm)
 
-		// Point BPF instruction to the FD of the map referenced. Update the last 4 bytes of
-		// instruction (immediate constant) with the map's FD.
-		// BPF_MEM | <size> | BPF_STX:  *(size *) (dst_reg + off) = src_reg
-		// BPF_MEM | <size> | BPF_ST:   *(size *) (dst_reg + off) = imm32
-		mapName := relocationEntry.symbol.Name
-		log.Infof("Map to be relocated; Name: %s", mapName)
-		if progMap, ok := c.ElfContext.Maps[mapName]; ok {
-			log.Infof("Map found. Replace the offset with corresponding Map FD: %v", progMap.MapFD)
-			ebpfInstruction.SrcReg = 1 //dummy value for now
-			ebpfInstruction.Imm = int32(progMap.MapFD)
-			copy(data[relocationEntry.relOffset:relocationEntry.relOffset+8], ebpfInstruction.convertBPFInstructionToByteStream())
-			log.Infof("From data: BPF Instruction code: %d; offset: %d; imm: %d",
-				uint8(data[relocationEntry.relOffset]),
-				uint16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:relocationEntry.relOffset+4])),
-				uint32(binary.LittleEndian.Uint32(data[relocationEntry.relOffset+4:relocationEntry.relOffset+8])))
-		} else {
-			return fmt.Errorf("map '%s' doesn't exist", mapName)
+			//Validate for Invalid BPF instructions
+			if ebpfInstruction.Code != (unix.BPF_LD | unix.BPF_IMM | unix.BPF_DW) {
+				return fmt.Errorf("Invalid BPF instruction (at %d): %d",
+					relocationEntry.relOffset, ebpfInstruction.Code)
+			}
+
+			// Point BPF instruction to the FD of the map referenced. Update the last 4 bytes of
+			// instruction (immediate constant) with the map's FD.
+			// BPF_MEM | <size> | BPF_STX:  *(size *) (dst_reg + off) = src_reg
+			// BPF_MEM | <size> | BPF_ST:   *(size *) (dst_reg + off) = imm32
+			mapName := relocationEntry.symbol.Name
+			log.Infof("Map to be relocated; Name: %s", mapName)
+			if progMap, ok := c.ElfContext.Maps[mapName]; ok {
+				log.Infof("Map found. Replace the offset with corresponding Map FD: %v", progMap.MapFD)
+				ebpfInstruction.SrcReg = 1 //dummy value for now
+				ebpfInstruction.Imm = int32(progMap.MapFD)
+				copy(data[relocationEntry.relOffset:relocationEntry.relOffset+8], ebpfInstruction.convertBPFInstructionToByteStream())
+				log.Infof("From data: BPF Instruction code: %d; offset: %d; imm: %d",
+					uint8(data[relocationEntry.relOffset]),
+					uint16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:relocationEntry.relOffset+4])),
+					uint32(binary.LittleEndian.Uint32(data[relocationEntry.relOffset+4:relocationEntry.relOffset+8])))
+			} else {
+				return fmt.Errorf("map '%s' doesn't exist", mapName)
+			}
 		}
-	}
 	}
 
 	var pgmList = make(map[string]ebpf_progs.BPFProgram)
@@ -357,9 +357,9 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 					}
 					log.Infof("loaded prog with %d", progFD)
 					pgmList[ProgName] = ebpf_progs.BPFProgram{
-						ProgFD:  progFD,
-						PinPath: pinPath,
-						ProgType: progType,
+						ProgFD:      progFD,
+						PinPath:     pinPath,
+						ProgType:    progType,
 						SubProgType: subProgType,
 					}
 				} else {
@@ -434,13 +434,13 @@ func (c *BPFParser) doLoadELF(r io.ReaderAt) error {
 		log.Infof("Found PROG Section at Index %v", sectionIndex)
 		splitProgType := strings.Split(section.Name, "/")
 		progType := strings.ToLower(splitProgType[0])
-		var subProgType string 
+		var subProgType string
 		if len(splitProgType) == 2 {
 			subProgType = strings.ToLower(splitProgType[1])
 			log.Infof("Found subprog type %s", subProgType)
 		}
 		log.Infof("Found the progType %s", progType)
-		if progType != "xdp" && progType != "tc_cls" && progType != "tc_act" && progType != "kprobe"{
+		if progType != "xdp" && progType != "tc_cls" && progType != "tc_act" && progType != "kprobe" {
 			log.Infof("Not supported program %s", progType)
 			continue
 		}

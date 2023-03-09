@@ -55,9 +55,9 @@ func New(logLocation *logger.Logger, path string, dir string) (*BpfProgApi, erro
 
 type BPFProgram struct {
 	// return program name, prog FD and pinPath
-	ProgFD  int
-	PinPath string
-	ProgType string
+	ProgFD      int
+	PinPath     string
+	ProgType    string
 	SubProgType string
 }
 
@@ -113,7 +113,7 @@ func (m *BpfProgApi) LoadProg(progType string, data []byte, licenseStr string, p
 	case "tc_act":
 		prog_type = uint32(netlink.BPF_PROG_TYPE_SCHED_ACT)
 	case "kprobe":
-		prog_type = uint32(netlink.BPF_PROG_TYPE_KPROBE)		
+		prog_type = uint32(netlink.BPF_PROG_TYPE_KPROBE)
 	default:
 		prog_type = uint32(netlink.BPF_PROG_TYPE_UNSPEC)
 	}

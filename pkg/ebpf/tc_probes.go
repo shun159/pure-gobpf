@@ -14,7 +14,7 @@ func enableQdisc(link netlink.Link) bool {
 	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
 		log.Infof("Unable to check qdisc hence try installing")
-		return true 
+		return true
 	}
 
 	qdiscHandle := netlink.MakeHandle(0xffff, 0)
@@ -23,7 +23,7 @@ func enableQdisc(link netlink.Link) bool {
 		if attrs.LinkIndex != link.Attrs().Index {
 			continue
 		}
-		if (attrs.Handle & qdiscHandle) == qdiscHandle && attrs.Parent == netlink.HANDLE_INGRESS {
+		if (attrs.Handle&qdiscHandle) == qdiscHandle && attrs.Parent == netlink.HANDLE_INGRESS {
 			log.Infof("Found qdisc hence don't install again")
 			return false
 		}
@@ -47,7 +47,7 @@ func TCIngressAttach(interfaceName string, progFD int) error {
 		Parent:    netlink.HANDLE_INGRESS,
 	}
 
-	if (enableQdisc(intf)) {
+	if enableQdisc(intf) {
 		qdisc := &netlink.GenericQdisc{
 			QdiscAttrs: attrs,
 			QdiscType:  "clsact",
@@ -81,6 +81,36 @@ func TCIngressAttach(interfaceName string, progFD int) error {
 	return nil
 }
 
+func TCIngressDetach(interfaceName string) error {
+	var log = logger.Get()
+	intf, err := netlink.LinkByName(interfaceName)
+	if err != nil {
+		log.Infof("Failed to find device name")
+		return fmt.Errorf("failed to find device by name %s: %w", interfaceName, err)
+	}
+
+	//Currently supports only one handle, in future we might need to cache the handle
+	filterHandle := netlink.MakeHandle(0xffff, 0)
+	filterParent := uint32(netlink.HANDLE_MIN_INGRESS)
+
+	filters, err := netlink.FilterList(intf, filterParent)
+	if err != nil {
+		log.Infof("Failed to filter list")
+		return fmt.Errorf("Failed to get filter list: %v", err)
+	}
+
+	for _, filter := range filters {
+		if filter.Attrs().Handle == filterHandle {
+			err = netlink.FilterDel(filter)
+			if err != nil {
+				return fmt.Errorf("Delete filter failed on intf %s : %v", interfaceName, err)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("Detach failed on ingress interface - %s", interfaceName)
+}
+
 func TCEgressAttach(interfaceName string, progFD int) error {
 	var log = logger.Get()
 	intf, err := netlink.LinkByName(interfaceName)
@@ -95,7 +125,7 @@ func TCEgressAttach(interfaceName string, progFD int) error {
 		Parent:    netlink.HANDLE_INGRESS,
 	}
 
-	if (enableQdisc(intf)) {
+	if enableQdisc(intf) {
 		qdisc := &netlink.GenericQdisc{
 			QdiscAttrs: attrs,
 			QdiscType:  "clsact",
@@ -127,4 +157,34 @@ func TCEgressAttach(interfaceName string, progFD int) error {
 	}
 	log.Infof("TC filter add done")
 	return nil
+}
+
+func TCEgressDetach(interfaceName string) error {
+	var log = logger.Get()
+	intf, err := netlink.LinkByName(interfaceName)
+	if err != nil {
+		log.Infof("Failed to find device name")
+		return fmt.Errorf("failed to find device by name %s: %w", interfaceName, err)
+	}
+
+	//Currently supports only one handle, in future we might need to cache the handle
+	filterHandle := netlink.MakeHandle(0xffff, 0)
+	filterParent := uint32(netlink.HANDLE_MIN_EGRESS)
+
+	filters, err := netlink.FilterList(intf, filterParent)
+	if err != nil {
+		log.Infof("Failed to filter list")
+		return fmt.Errorf("Failed to get filter list: %v", err)
+	}
+
+	for _, filter := range filters {
+		if filter.Attrs().Handle == filterHandle {
+			err = netlink.FilterDel(filter)
+			if err != nil {
+				return fmt.Errorf("Delete filter failed on intf %s : %v", interfaceName, err)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("Detach failed on egress interface - %s", interfaceName)
 }
