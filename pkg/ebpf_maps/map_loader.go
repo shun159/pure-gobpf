@@ -391,3 +391,12 @@ func (m *BpfMapApi) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr, mapFD uint3
 	log.Info("Bulk update is successful for mapFD: %d", int(mapFD))
 	return nil
 }
+
+/*
+func (m *BpfMapApi) SetupPerfReader(perfMap BPFMap) error {
+	if perfMap.Def.Type != BPF_MAP_TYPE_PERF_EVENT_ARRAY {
+		retun fmt.Errorf("Not a supported map type")
+	}
+
+}*/
+
