@@ -78,7 +78,7 @@ func sharedMemoryPageSize(bufferSize int) int {
 	return (numPages + 2) * pageSize
 }
 
-func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.APIs) error {
+func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.BpfMapApi) error {
 
 	var log = logger.Get()
 	p.cpu = cpu
