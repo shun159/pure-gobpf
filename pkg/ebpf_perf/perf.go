@@ -159,7 +159,12 @@ func getCPUCount() (int, error) {
 	}
 	return n, nil
 	*/
-	spec := "/sys/devices/system/cpu/possible"
+	path := "/sys/devices/system/cpu/possible"
+	specBytes, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	spec := string(specBytes)
 	if strings.Trim(spec, "\n") == "0" {
 		return 1, nil
 	}
