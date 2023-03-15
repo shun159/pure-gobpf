@@ -79,9 +79,10 @@ func sharedMemoryPageSize(bufferSize int) int {
 	return (numPages + 2) * pageSize
 }
 
-func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.APIs) error {
+func newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.APIs) (*PerfEventPerCPUReader, error) {
 
 	var log = logger.Get()
+	p := PerfEventPerCPUReader{}
 	p.cpu = cpu
 	log.Infof("NewPerfPerCPUReader %d", cpu)
 	//Open perf event
@@ -99,7 +100,7 @@ func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, 
 	perf_fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		log.Infof("Failed to open perf event %v", err)
-		return fmt.Errorf("Failed to open perf event %v", err)
+		return nil, fmt.Errorf("Failed to open perf event %v", err)
 	}
 	defer unix.Close(perf_fd)
 
@@ -108,7 +109,7 @@ func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, 
 	log.Info("Got perf_fd %d and now setting nonblock", perf_fd)
 	if err := unix.SetNonblock(p.perfFD, true); err != nil {
 		unix.Close(p.perfFD)
-		return err
+		return nil, err
 	}
 
 	//Shared memory setup
@@ -117,7 +118,7 @@ func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, 
 	if err != nil {
 		unix.Close(p.perfFD)
 		log.Infof("can't mmap: %v", err)
-		return fmt.Errorf("can't mmap: %v", err)
+		return nil, fmt.Errorf("can't mmap: %v", err)
 	}
 
 	p.shmmap = mmap
@@ -140,17 +141,17 @@ func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, 
 	if err != nil {
 		log.Infof("Failed to updated map, check if BPF_ANY is set")
 		unix.Close(p.perfFD)
-		return fmt.Errorf("Failed to update map %v", err)
+		return nil, fmt.Errorf("Failed to update map %v", err)
 	}
 
 	log.Infof("Enable perf")
 	//Enable perf
 	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(p.perfFD)), uintptr(uint(unix.PERF_EVENT_IOC_ENABLE)), 0); err != 0 {
 		log.Infof("error enabling perf event: %v", err)
-		return fmt.Errorf("error enabling perf event: %v", err)
+		return nil, fmt.Errorf("error enabling perf event: %v", err)
 	}
 	log.Infof("Done setup for CPU %d", cpu)
-	return nil
+	return &p, nil
 }
 
 func getCPUCount() (int, error) {
@@ -207,12 +208,14 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 
 	for cpu := 0; cpu < cpuCount; cpu++ {
 		//This is done for only online CPUs
-		err := perfReader.CpuReaders[cpu].newPerfPerCPUReader(cpu, 4096, mapFD, mapAPI)
+		cpuReader, err := newPerfPerCPUReader(cpu, 4096, mapFD, mapAPI) 
+		//err := perfReader.CpuReaders[cpu].newPerfPerCPUReader(cpu, 4096, mapFD, mapAPI)
 		if err != nil {
 			//TODO need cleanup here
 			log.Infof("Setting up perf buffer failed at cpu %d", cpu)
 			return nil, fmt.Errorf("Setting up perf buffer failed at cpu %d", cpu)
 		}
+		perfReader.CpuReaders[cpu] = cpuReader
 
 		perfReader.PerfEvents[cpu] = perfReader.CpuReaders[cpu].perfFD
 
