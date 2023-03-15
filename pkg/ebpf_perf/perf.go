@@ -83,6 +83,7 @@ func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, 
 
 	var log = logger.Get()
 	p.cpu = cpu
+	log.Infof("NewPerfPerCPUReader %d", cpu)
 	//Open perf event
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_SOFTWARE,
@@ -94,6 +95,7 @@ func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, 
 
 	attr.Size = uint32(unsafe.Sizeof(attr))
 
+	log.Infof("open perf FD")
 	perf_fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		log.Infof("Failed to open perf event %v", err)
@@ -103,12 +105,14 @@ func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, 
 
 	p.perfFD = perf_fd
 
+	log.Info("Got perf_fd %d and now setting nonblock", perf_fd)
 	if err := unix.SetNonblock(p.perfFD, true); err != nil {
 		unix.Close(p.perfFD)
 		return err
 	}
 
 	//Shared memory setup
+	log.Infof("Setting shared memory for perffd")
 	mmap, err := unix.Mmap(p.perfFD, 0, sharedMemoryPageSize(bufferSize), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
 		unix.Close(p.perfFD)
@@ -130,6 +134,7 @@ func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, 
 
 	p.eventRingBuffer = eventRingBuffer
 
+	log.Infof("Update perf map %d", mapFD)
 	//Map update
 	err = mapAPI.UpdateMapEntry(uintptr(unsafe.Pointer(&cpu)), uintptr(unsafe.Pointer(&p.perfFD)), uint32(mapFD))
 	if err != nil {
@@ -138,11 +143,13 @@ func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, 
 		return fmt.Errorf("Failed to update map %v", err)
 	}
 
+	log.Infof("Enable perf")
 	//Enable perf
 	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(p.perfFD)), uintptr(uint(unix.PERF_EVENT_IOC_ENABLE)), 0); err != 0 {
 		log.Infof("error enabling perf event: %v", err)
 		return fmt.Errorf("error enabling perf event: %v", err)
 	}
+	log.Infof("Done setup for CPU %d", cpu)
 	return nil
 }
 
