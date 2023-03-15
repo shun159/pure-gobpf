@@ -228,11 +228,12 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create call epollCreate1: %v", err)
 	}
+	log.Infof("Got pollFD ", pollFD)
 
 	//Ideally this can be in previous loop but if any CPU
 	//perf-buf fails we don't need to proceed.
 	for cpu, perfFD := range perfReader.PerfEvents {
-		log.Infof("Adding CPU %d and perfFD %d to epoll event", cpu, perfFD)
+		log.Infof("Adding CPU %d and perfFD %d and epollFD %d to epoll event", cpu, perfFD, pollFD)
 		event := unix.EpollEvent{
 			Events: unix.EPOLLIN,
 			Fd:     int32(perfFD),
