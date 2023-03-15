@@ -106,7 +106,7 @@ func newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.APIs) (*Pe
 
 	p.perfFD = perf_fd
 
-	log.Info("Got perf_fd %d and now setting nonblock", perf_fd)
+	log.Info("Got perf_fd and now setting nonblock - ", perf_fd)
 	if err := unix.SetNonblock(p.perfFD, true); err != nil {
 		unix.Close(p.perfFD)
 		return nil, err
@@ -218,10 +218,12 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 		perfReader.CpuReaders[cpu] = cpuReader
 
 		perfReader.PerfEvents[cpu] = perfReader.CpuReaders[cpu].perfFD
+		log.Infof("CPU %d -> FD %d", cpu, perfReader.CpuReaders[cpu].perfFD)
 
 	}
 
 	//Add the perfFD to poll
+	log.Infof("Create Epoll create")
 	pollFD, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
 		return nil, fmt.Errorf("create call epollCreate1: %v", err)
@@ -230,6 +232,7 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 	//Ideally this can be in previous loop but if any CPU
 	//perf-buf fails we don't need to proceed.
 	for cpu, perfFD := range perfReader.PerfEvents {
+		log.Infof("Adding CPU %d and perfFD %d to epoll event", cpu, perfFD)
 		event := unix.EpollEvent{
 			Events: unix.EPOLLIN,
 			Fd:     int32(perfFD),
@@ -237,6 +240,7 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 		}
 
 		if err := unix.EpollCtl(pollFD, unix.EPOLL_CTL_ADD, perfFD, &event); err != nil {
+			log.Infof("Failed to add perfFD to manage epoll: %v", err)
 			return nil, fmt.Errorf("Failed to add perfFD to manage epoll: %v", err)
 		}
 	}
@@ -246,7 +250,7 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 	perfReader.updatesChannel = make(chan []byte)
 	perfReader.wg.Add(1)
 	perfReader.CpuCount = cpuCount
-
+	log.Infof("Done Init perf buffer")
 	return perfReader, nil
 
 }
