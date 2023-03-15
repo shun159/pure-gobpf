@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	//"os/exec"
-	//"strconv"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -16,6 +14,7 @@ import (
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 	"golang.org/x/sys/unix"
+
 )
 
 var (
@@ -84,6 +83,7 @@ func newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.APIs) (*Pe
 	var log = logger.Get()
 	p := PerfEventPerCPUReader{}
 	p.cpu = cpu
+	watermark := 1
 	log.Infof("NewPerfPerCPUReader %d", cpu)
 	//Open perf event
 	attr := unix.PerfEventAttr{
@@ -91,19 +91,18 @@ func newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.APIs) (*Pe
 		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
 		Bits:        unix.PerfBitWatermark,
 		Sample_type: unix.PERF_SAMPLE_RAW,
-		Wakeup:      uint32(1),
+		Wakeup:      uint32(watermark),
 	}
 
 	attr.Size = uint32(unsafe.Sizeof(attr))
 
 	log.Infof("open perf FD")
-	perf_fd, err := unix.PerfEventOpen(&attr, 0, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	perf_fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		log.Infof("Failed to open perf event %v", err)
 		return nil, fmt.Errorf("Failed to open perf event %v", err)
 	}
-	defer unix.Close(perf_fd)
-
+	log.Infof("Got ", perf_fd)
 	p.perfFD = perf_fd
 
 	log.Info("Got perf_fd and now setting nonblock - ", perf_fd)
