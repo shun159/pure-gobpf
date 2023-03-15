@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"strconv"
+	//"os/exec"
+	//"strconv"
 	"sync"
 	"sync/atomic"
 	"unsafe"
+	"strings"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
@@ -146,6 +147,7 @@ func (p *PerfEventPerCPUReader) newPerfPerCPUReader(cpu, bufferSize, mapFD int, 
 }
 
 func getCPUCount() (int, error) {
+	/*
 	cmd := exec.Command("nproc")
 	output, err := cmd.Output()
 	if err != nil {
@@ -156,6 +158,23 @@ func getCPUCount() (int, error) {
 		return 0, err
 	}
 	return n, nil
+	*/
+	spec := "/sys/devices/system/cpu/possible"
+	if strings.Trim(spec, "\n") == "0" {
+		return 1, nil
+	}
+
+	var low, high int
+	n, err := fmt.Sscanf(spec, "%d-%d\n", &low, &high)
+	if n != 2 || err != nil {
+		return 0, fmt.Errorf("invalid format: %s", spec)
+	}
+	if low != 0 {
+		return 0, fmt.Errorf("CPU spec doesn't start at zero: %s", spec)
+	}
+
+	// cpus is 0 indexed
+	return high + 1, nil
 }
 
 func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
