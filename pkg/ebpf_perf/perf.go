@@ -228,7 +228,7 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create call epollCreate1: %v", err)
 	}
-	log.Infof("Got pollFD ", pollFD)
+	log.Infof("Got pollFD - ", pollFD)
 
 	//Ideally this can be in previous loop but if any CPU
 	//perf-buf fails we don't need to proceed.
