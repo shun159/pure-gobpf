@@ -243,7 +243,7 @@ func (m *BpfMapApi) CreateMapEntry(key, value uintptr, mapFD uint32) error {
 
 //TODO : This should be updated to behave like update
 func (m *BpfMapApi) UpdateMapEntry(key, value uintptr, mapFD uint32) error {
-	return m.CreateUpdateMap(key, value, uint64(BPF_NOEXIST), mapFD)
+	return m.CreateUpdateMap(key, value, uint64(BPF_ANY), mapFD)
 }
 
 func (m *BpfMapApi) CreateUpdateMap(key, value uintptr, updateFlags uint64, mapFD uint32) error {
