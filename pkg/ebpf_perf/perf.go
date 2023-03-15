@@ -91,13 +91,13 @@ func newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.APIs) (*Pe
 		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
 		Bits:        unix.PerfBitWatermark,
 		Sample_type: unix.PERF_SAMPLE_RAW,
-		Wakeup:      1,
+		Wakeup:      uint32(1),
 	}
 
 	attr.Size = uint32(unsafe.Sizeof(attr))
 
 	log.Infof("open perf FD")
-	perf_fd, err := unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	perf_fd, err := unix.PerfEventOpen(&attr, 0, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
 	if err != nil {
 		log.Infof("Failed to open perf event %v", err)
 		return nil, fmt.Errorf("Failed to open perf event %v", err)
