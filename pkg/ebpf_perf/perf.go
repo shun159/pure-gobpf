@@ -525,7 +525,9 @@ func (pe *PerfReader) readRing(rd io.Reader, rec *PerfRecord, buf []byte) error 
 		rec.RawSample, err = readRawSample(rd, buf, rec.RawSample)
 		return err
 	default:
-		log.Info("Unkown header")
+		test, _ := readRawSample(rd, buf, rec.RawSample) 
+		log.Info("Debugging - ", string(test))
+		log.Info("Unkown header", header.Type)
 		return nil
 	}
 
