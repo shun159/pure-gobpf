@@ -509,11 +509,13 @@ func (pe *PerfReader) readRing(rd io.Reader, rec *PerfRecord, buf []byte) error 
 		log.Info("Read perf event header %v", err)
 		return fmt.Errorf("read perf event header: %v", err)
 	}
+	log.Info("Trying to compute header")
 	header := perfEventHeader{
 		NativeEndian.Uint32(buf[0:4]),
 		NativeEndian.Uint16(buf[4:6]),
 		NativeEndian.Uint16(buf[6:8]),
 	}
+	log.Info("Maybe header is corrupted???")
 	switch header.Type {
 	case unix.PERF_RECORD_LOST:
 		log.Info("Lost record")
@@ -527,8 +529,8 @@ func (pe *PerfReader) readRing(rd io.Reader, rec *PerfRecord, buf []byte) error 
 		rec.RawSample, err = readRawSample(rd, buf, rec.RawSample)
 		return err
 	default:
-		test, _ := readRawSample(rd, buf, rec.RawSample) 
-		log.Info("Debugging - ", string(test))
+		//test, _ := readRawSample(rd, buf, rec.RawSample) 
+		//log.Info("Debugging - ", string(test))
 		log.Info("Unkown header", header.Type)
 		return nil
 	}
