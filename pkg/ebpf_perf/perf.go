@@ -426,7 +426,7 @@ func (pe *PerfReader) parseEvent(rec *PerfRecord) error {
 				log.Infof("Failed to wait %v", err)
 				return err
 			}
-
+			log.Info("Found nEvents ", nEvents)
 			for _, event := range pe.epollEvents[:nEvents] {
 				ring := pe.rings[cpuForEvent(&event)]
 				pe.epollRings = append(pe.epollRings, ring)
@@ -434,6 +434,7 @@ func (pe *PerfReader) parseEvent(rec *PerfRecord) error {
 				// Read the current head pointer now, not every time
 				// we read a record. This prevents a single fast producer
 				// from keeping the reader busy.
+				log.Info("Load head")
 				ring.loadHead()
 			}
 		}
@@ -496,6 +497,7 @@ func (pe *PerfReader) readRing(rd io.Reader, rec *PerfRecord, buf []byte) error 
 	var log = logger.Get()
 	//buf := make([]byte, perfEventHeaderSize)
 
+	log.Info("In read ring")
 	buf = buf[:perfEventHeaderSize]
 	_, err := io.ReadFull(rd, buf)
 	if errors.Is(err, io.EOF) {
@@ -523,6 +525,7 @@ func (pe *PerfReader) readRing(rd io.Reader, rec *PerfRecord, buf []byte) error 
 		rec.RawSample, err = readRawSample(rd, buf, rec.RawSample)
 		return err
 	default:
+		log.Info("Unkown header")
 		return nil
 	}
 
