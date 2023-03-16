@@ -33,6 +33,8 @@ type perfEventHeader struct {
 }
 
 type PerfReader struct {
+	poller *Poller
+	mu sync.Mutex
 	updatesChannel chan []byte
 	stopChannel    chan struct{}
 	wg             sync.WaitGroup
@@ -40,7 +42,12 @@ type PerfReader struct {
 	PerfEvents     map[int]int
 	//Epollfd        int
 	CpuCount       int
-	poller *Poller
+	rings       []*PerfEventPerCPUReader
+	epollEvents []unix.EpollEvent
+	epollRings  []*PerfEventPerCPUReader
+	eventHeader []byte
+	pauseMu  sync.Mutex
+	pauseFds []int
 }
 
 type Poller struct {
@@ -58,7 +65,7 @@ type PerfEventPerCPUReader struct {
 	perfFD          int
 	cpu             int
 	shmmap          []byte
-	eventRingBuffer *PerfEventRingBuffer
+	*PerfEventRingBuffer
 }
 
 type PerfEventRingBuffer struct {
@@ -92,8 +99,8 @@ func sharedMemoryPageSize(bufferSize int) int {
 func newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.APIs) (*PerfEventPerCPUReader, error) {
 
 	var log = logger.Get()
-	p := PerfEventPerCPUReader{}
-	p.cpu = cpu
+	//p := PerfEventPerCPUReader{}
+	//p.cpu = cpu
 	watermark := 1
 	log.Infof("NewPerfPerCPUReader %d", cpu)
 	//Open perf event
@@ -114,27 +121,28 @@ func newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.APIs) (*Pe
 		return nil, fmt.Errorf("Failed to open perf event %v", err)
 	}
 	log.Infof("Got ", perf_fd)
-	p.perfFD = perf_fd
+	//p.perfFD = perf_fd
 
 	log.Info("Got perf_fd and now setting nonblock - ", perf_fd)
-	if err := unix.SetNonblock(p.perfFD, true); err != nil {
-		unix.Close(p.perfFD)
+	if err := unix.SetNonblock(perf_fd, true); err != nil {
+		unix.Close(perf_fd)
 		return nil, err
 	}
 
 	//Shared memory setup
 	log.Infof("Setting shared memory for perffd")
-	mmap, err := unix.Mmap(p.perfFD, 0, sharedMemoryPageSize(bufferSize), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	mmap, err := unix.Mmap(perf_fd, 0, sharedMemoryPageSize(bufferSize), unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
-		unix.Close(p.perfFD)
+		unix.Close(perf_fd)
 		log.Infof("can't mmap: %v", err)
 		return nil, fmt.Errorf("can't mmap: %v", err)
 	}
 
-	p.shmmap = mmap
+	//p.shmmap = mmap
 
-	meta_data := (*unix.PerfEventMmapPage)(unsafe.Pointer(&p.shmmap[0]))
+	meta_data := (*unix.PerfEventMmapPage)(unsafe.Pointer(&mmap[0]))
 
+	/*
 	eventRingBuffer := &PerfEventRingBuffer{}
 	//BUFFER - p.shmmap[meta_data.Data_offset:meta_data.Data_offset+meta_data.Data_size]
 	eventRingBuffer.head = atomic.LoadUint64(&meta_data.Data_head)
@@ -142,26 +150,49 @@ func newPerfPerCPUReader(cpu, bufferSize, mapFD int, mapAPI ebpf_maps.APIs) (*Pe
 	eventRingBuffer.meta = meta_data
 	eventRingBuffer.ringbuffer = p.shmmap[meta_data.Data_offset : meta_data.Data_offset+meta_data.Data_size]
 	eventRingBuffer.mask = uint64(cap(eventRingBuffer.ringbuffer) - 1)
+	*/
+	/*
+	ring := &perfEventRing{
+		fd:         fd,
+		cpu:        cpu,
+		mmap:       mmap,
+		ringReader: newRingReader(meta, mmap[meta.Data_offset:meta.Data_offset+meta.Data_size]),
+	}*/
 
-	p.eventRingBuffer = eventRingBuffer
-
+	ring := &PerfEventPerCPUReader{
+		perfFD: perf_fd,
+		cpu: cpu,
+		shmmap: mmap,
+		PerfEventRingBuffer: newRingReader(meta_data, mmap[meta_data.Data_offset:meta_data.Data_offset+meta_data.Data_size]), 
+	} 
 	log.Infof("Update perf map %d", mapFD)
 	//Map update
-	err = mapAPI.UpdateMapEntry(uintptr(unsafe.Pointer(&cpu)), uintptr(unsafe.Pointer(&p.perfFD)), uint32(mapFD))
+	err = mapAPI.UpdateMapEntry(uintptr(unsafe.Pointer(&cpu)), uintptr(unsafe.Pointer(&perf_fd)), uint32(mapFD))
 	if err != nil {
 		log.Infof("Failed to updated map, check if BPF_ANY is set")
-		unix.Close(p.perfFD)
+		unix.Close(perf_fd)
 		return nil, fmt.Errorf("Failed to update map %v", err)
 	}
 
 	log.Infof("Enable perf")
 	//Enable perf
-	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(p.perfFD)), uintptr(uint(unix.PERF_EVENT_IOC_ENABLE)), 0); err != 0 {
+	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(perf_fd)), uintptr(uint(unix.PERF_EVENT_IOC_ENABLE)), 0); err != 0 {
 		log.Infof("error enabling perf event: %v", err)
 		return nil, fmt.Errorf("error enabling perf event: %v", err)
 	}
 	log.Infof("Done setup for CPU %d", cpu)
-	return &p, nil
+	return ring, nil
+}
+
+func newRingReader(meta *unix.PerfEventMmapPage, ring []byte) *PerfEventRingBuffer {
+	return &PerfEventRingBuffer{
+		meta: meta,
+		head: atomic.LoadUint64(&meta.Data_head),
+		tail: atomic.LoadUint64(&meta.Data_tail),
+		// cap is always a power of two
+		mask: uint64(cap(ring) - 1),
+		ringbuffer: ring,
+	}
 }
 
 func getCPUCount() (int, error) {
@@ -215,6 +246,8 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 	perfReader.CpuReaders = make([]*PerfEventPerCPUReader, cpuCount)
 	//perfReader.Pollfds := make([]syscall.PollFd, 0)
 	perfReader.PerfEvents = make(map[int]int)
+	rings    := make([]*PerfEventPerCPUReader, 0, cpuCount)
+	pauseFds := make([]int, 0, cpuCount)
 
 	for cpu := 0; cpu < cpuCount; cpu++ {
 		//This is done for only online CPUs
@@ -228,6 +261,10 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 		perfReader.CpuReaders[cpu] = cpuReader
 
 		perfReader.PerfEvents[cpu] = perfReader.CpuReaders[cpu].perfFD
+
+		rings = append(rings, cpuReader)
+		pauseFds = append(pauseFds, cpuReader.perfFD)
+
 		log.Infof("CPU %d -> FD %d", cpu, perfReader.CpuReaders[cpu].perfFD)
 
 	}
@@ -289,7 +326,13 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 	perfReader.updatesChannel = make(chan []byte)
 	perfReader.wg.Add(1)
 	perfReader.CpuCount = cpuCount
+	perfReader.rings = rings
+	perfReader.pauseFds = pauseFds
+	perfReader.epollEvents = make([]unix.EpollEvent, len(rings))
+	perfReader.epollRings = make([]*PerfEventPerCPUReader, 0, len(rings))
+	perfReader.eventHeader = make([]byte, perfEventHeaderSize)
 	log.Infof("Done Init perf buffer")
+
 	return perfReader, nil
 
 }
@@ -326,6 +369,10 @@ func (pe *PerfReader) parseEvent(CpuReaders *PerfEventPerCPUReader) {
 }
 */
 
+func cpuForEvent(event *unix.EpollEvent) int {
+	return int(event.Pad)
+}
+
 func (pe *PerfReader) Read() (PerfRecord, error) {
 	var rec PerfRecord
 	return rec, pe.parseEvent(&rec)
@@ -333,20 +380,23 @@ func (pe *PerfReader) Read() (PerfRecord, error) {
 
 func (pe *PerfReader) parseEvent(rec *PerfRecord) error {
 	var log = logger.Get()
+
+
+	pe.mu.Lock()
+	defer pe.mu.Unlock()
+
+	if pe.rings == nil {
+		return fmt.Errorf("perf ringbuffer: %w", ErrClosed)
+	}
 	if len(pe.PerfEvents) == 0 {
 		return fmt.Errorf("None of the perf buffers are initialized")
 	}
 	log.Info("In Parse Events to read")
 
+	/*
 	epollEvents := make([]unix.EpollEvent, pe.CpuCount)
 	for {
 		//Poll for events
-		/*
-		numEvents, err := unix.EpollWait(pe.Epollfd, epollEvents, -1)
-		if err != nil {
-			log.Infof("Failed to wait %v", err)
-			return err
-		}*/
 		numEvents, err := pe.wait(epollEvents)
 		if err != nil {
 			log.Infof("Failed to wait %v", err)
@@ -367,6 +417,41 @@ func (pe *PerfReader) parseEvent(rec *PerfRecord) error {
 
 		}
 	}
+	*/
+	for {
+		if len(pe.epollRings) == 0 {
+			
+			nEvents, err := pe.wait(pe.epollEvents)
+			if err != nil {
+				log.Infof("Failed to wait %v", err)
+				return err
+			}
+
+			for _, event := range pe.epollEvents[:nEvents] {
+				ring := pe.rings[cpuForEvent(&event)]
+				pe.epollRings = append(pe.epollRings, ring)
+
+				// Read the current head pointer now, not every time
+				// we read a record. This prevents a single fast producer
+				// from keeping the reader busy.
+				ring.loadHead()
+			}
+		}
+
+		// Start at the last available event. The order in which we
+		// process them doesn't matter, and starting at the back allows
+		// resizing epollRings to keep track of processed rings.
+		err := pe.readFromRingBuffer(rec, pe.epollRings[len(pe.epollRings)-1])
+		if err == errEOR {
+			// We've emptied the current ring buffer, process
+			// the next one.
+			pe.epollRings = pe.epollRings[:len(pe.epollRings)-1]
+			continue
+		}
+
+		return err
+	}
+
 }
 
 func (pe *PerfReader) wait(events []unix.EpollEvent) (int, error) {
@@ -401,9 +486,17 @@ func (pe *PerfReader) wait(events []unix.EpollEvent) (int, error) {
 	}
 }
 
-func (pe *PerfReader) readFromRingBuffer(rd io.Reader, rec *PerfRecord) error {
+func (pe *PerfReader) readFromRingBuffer(rec *PerfRecord, ring *PerfEventPerCPUReader) error {
+	defer ring.writeTail()
+	rec.CPU = ring.cpu
+	return pe.readRing(ring, rec, pe.eventHeader)
+} 
+
+func (pe *PerfReader) readRing(rd io.Reader, rec *PerfRecord, buf []byte) error {
 	var log = logger.Get()
-	buf := make([]byte, perfEventHeaderSize)
+	//buf := make([]byte, perfEventHeaderSize)
+
+	buf = buf[:perfEventHeaderSize]
 	_, err := io.ReadFull(rd, buf)
 	if errors.Is(err, io.EOF) {
 		log.Info("EOF")
@@ -506,6 +599,16 @@ func (rr *PerfEventRingBuffer) Read(p []byte) (int, error) {
 	}
 
 	return n, nil
+}
+
+func (rr *PerfEventRingBuffer) loadHead() {
+	rr.head = atomic.LoadUint64(&rr.meta.Data_head)
+}
+
+func (rr *PerfEventRingBuffer) writeTail() {
+	// Commit the new tail. This lets the kernel know that
+	// the ring buffer has been consumed.
+	atomic.StoreUint64(&rr.meta.Data_tail, rr.tail)
 }
 
 type temporaryError interface {
