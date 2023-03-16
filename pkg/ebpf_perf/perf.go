@@ -38,8 +38,19 @@ type PerfReader struct {
 	wg             sync.WaitGroup
 	CpuReaders     []*PerfEventPerCPUReader
 	PerfEvents     map[int]int
-	Epollfd        int
+	//Epollfd        int
 	CpuCount       int
+	poller *Poller
+}
+
+type Poller struct {
+	// mutexes protect the fields declared below them. If you need to
+	// acquire both at once you must lock epollMu before eventMu.
+	epollMu sync.Mutex
+	epollFd int
+
+	eventMu sync.Mutex
+	event   *eventFd
 }
 
 //Ref: https://github.com/iovisor/gobpf/blob/b5e5715ad84d6349cb29aea30990bf88f973376d/elf/perf.go
@@ -229,6 +240,33 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 	}
 	log.Infof("Got pollFD - ", pollFD)
 
+	p := &Poller{epollFd: pollFD}
+
+	p.event, err = newEventFd()
+	if err != nil {
+		unix.Close(pollFD)
+		return nil, err
+	}
+
+	event := unix.EpollEvent{
+		Events: unix.EPOLLIN,
+		Fd:     int32(p.event.raw),
+		Pad:    int32(0),
+	}
+
+	if err := unix.EpollCtl(pollFD, unix.EPOLL_CTL_ADD, p.event.raw, &event); err != nil {
+		log.Infof("Failed to add eventFD to manage epoll: %v", err)
+		return nil, fmt.Errorf("Failed to add eventFD to manage epoll: %v", err)
+	}
+
+	/*
+	if err := p.Add(p.event.raw, 0); err != nil {
+		unix.Close(epollFd)
+		p.event.close()
+		return nil, fmt.Errorf("add eventfd: %w", err)
+	}
+	*/
+
 	//Ideally this can be in previous loop but if any CPU
 	//perf-buf fails we don't need to proceed.
 	for cpu, perfFD := range perfReader.PerfEvents {
@@ -245,7 +283,8 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 		}
 	}
 
-	perfReader.Epollfd = pollFD
+	//perfReader.Epollfd = pollFD
+	perfReader.poller = p
 	perfReader.stopChannel = make(chan struct{})
 	perfReader.updatesChannel = make(chan []byte)
 	perfReader.wg.Add(1)
@@ -302,7 +341,13 @@ func (pe *PerfReader) parseEvent(rec *PerfRecord) error {
 	epollEvents := make([]unix.EpollEvent, pe.CpuCount)
 	for {
 		//Poll for events
+		/*
 		numEvents, err := unix.EpollWait(pe.Epollfd, epollEvents, -1)
+		if err != nil {
+			log.Infof("Failed to wait %v", err)
+			return err
+		}*/
+		numEvents, err := pe.wait(epollEvents)
 		if err != nil {
 			log.Infof("Failed to wait %v", err)
 			return err
@@ -321,6 +366,38 @@ func (pe *PerfReader) parseEvent(rec *PerfRecord) error {
 			return err
 
 		}
+	}
+}
+
+func (pe *PerfReader) wait(events []unix.EpollEvent) (int, error) {
+	pe.poller.epollMu.Lock()
+	defer pe.poller.epollMu.Unlock()
+	for {
+		timeout := int(-1)
+		n, err := unix.EpollWait(pe.poller.epollFd, events, timeout)
+		if temp, ok := err.(temporaryError); ok && temp.Temporary() {
+			// Retry the syscall if we were interrupted, see https://github.com/golang/go/issues/20400
+			continue
+		}
+
+		if err != nil {
+			return 0, err
+		}
+
+		if n == 0 {
+			return 0, fmt.Errorf("epoll wait: %w", os.ErrDeadlineExceeded)
+		}
+
+		for _, event := range events[:n] {
+			if int(event.Fd) == pe.poller.event.raw {
+				// Since we don't read p.event the event is never cleared and
+				// we'll keep getting this wakeup until Close() acquires the
+				// lock and sets p.epollFd = -1.
+				return 0, fmt.Errorf("epoll wait: %w", os.ErrClosed)
+			}
+		}
+
+		return n, nil
 	}
 }
 
@@ -429,4 +506,41 @@ func (rr *PerfEventRingBuffer) Read(p []byte) (int, error) {
 	}
 
 	return n, nil
+}
+
+type temporaryError interface {
+	Temporary() bool
+}
+
+type eventFd struct {
+	file *os.File
+	// prefer raw over file.Fd(), since the latter puts the file into blocking
+	// mode.
+	raw int
+}
+
+func newEventFd() (*eventFd, error) {
+	fd, err := unix.Eventfd(0, unix.O_CLOEXEC|unix.O_NONBLOCK)
+	if err != nil {
+		return nil, err
+	}
+	file := os.NewFile(uintptr(fd), "event")
+	return &eventFd{file, fd}, nil
+}
+
+func (efd *eventFd) close() error {
+	return efd.file.Close()
+}
+
+func (efd *eventFd) add(n uint64) error {
+	var buf [8]byte
+	NativeEndian.PutUint64(buf[:], 1)
+	_, err := efd.file.Write(buf[:])
+	return err
+}
+
+func (efd *eventFd) read() (uint64, error) {
+	var buf [8]byte
+	_, err := efd.file.Read(buf[:])
+	return NativeEndian.Uint64(buf[:]), err
 }
