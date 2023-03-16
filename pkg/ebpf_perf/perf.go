@@ -297,6 +297,7 @@ func (pe *PerfReader) parseEvent(rec *PerfRecord) error {
 	if len(pe.PerfEvents) == 0 {
 		return fmt.Errorf("None of the perf buffers are initialized")
 	}
+	log.Info("In Parse Events to read")
 
 	epollEvents := make([]unix.EpollEvent, pe.CpuCount)
 	for {
@@ -306,10 +307,12 @@ func (pe *PerfReader) parseEvent(rec *PerfRecord) error {
 			log.Infof("Failed to wait %v", err)
 			return err
 		}
+		log.Info("For num events ", numEvents)
 		for _, event := range epollEvents[:numEvents] {
 			//Get the CPU
 			cpuNum := event.Pad
 			rec.CPU = int(cpuNum)
+			log.Info("Got for cpu ", int(cpuNum))
 			err := pe.readFromRingBuffer(pe.CpuReaders[cpuNum].eventRingBuffer, rec)
 			if err == errEOR {
 				//continue to next event
@@ -322,11 +325,14 @@ func (pe *PerfReader) parseEvent(rec *PerfRecord) error {
 }
 
 func (pe *PerfReader) readFromRingBuffer(rd io.Reader, rec *PerfRecord) error {
+	var log = logger.Get()
 	buf := make([]byte, perfEventHeaderSize)
 	_, err := io.ReadFull(rd, buf)
 	if errors.Is(err, io.EOF) {
+		log.Info("EOF")
 		return errEOR
 	} else if err != nil {
+		log.Info("Read perf event header %v", err)
 		return fmt.Errorf("read perf event header: %v", err)
 	}
 	header := perfEventHeader{
@@ -336,11 +342,13 @@ func (pe *PerfReader) readFromRingBuffer(rd io.Reader, rec *PerfRecord) error {
 	}
 	switch header.Type {
 	case unix.PERF_RECORD_LOST:
+		log.Info("Lost record")
 		rec.RawSample = rec.RawSample[:0]
 		rec.LostSamples, err = readLostRecords(rd)
 		return err
 
 	case unix.PERF_RECORD_SAMPLE:
+		log.Info("record sample")
 		rec.LostSamples = 0
 		rec.RawSample, err = readRawSample(rd, buf, rec.RawSample)
 		return err
@@ -374,8 +382,10 @@ type perfEventSample struct {
 
 //Ref : Cilium
 func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
+	var log = logger.Get()
 	buf = buf[:perfEventSampleSize]
 	if _, err := io.ReadFull(rd, buf); err != nil {
+		log.Info("Read sample size %v", err)
 		return nil, fmt.Errorf("read sample size: %v", err)
 	}
 
@@ -391,8 +401,10 @@ func readRawSample(rd io.Reader, buf, sampleBuf []byte) ([]byte, error) {
 	}
 
 	if _, err := io.ReadFull(rd, data); err != nil {
+		log.Info("Read sample %v", err)
 		return nil, fmt.Errorf("read sample: %v", err)
 	}
+	log.Info("returning data")
 	return data, nil
 }
 
