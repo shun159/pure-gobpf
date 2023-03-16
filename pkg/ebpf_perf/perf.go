@@ -249,9 +249,11 @@ func InitPerfBuffer(mapFD int, mapAPI ebpf_maps.APIs) (*PerfReader, error) {
 	rings    := make([]*PerfEventPerCPUReader, 0, cpuCount)
 	pauseFds := make([]int, 0, cpuCount)
 
+	log.Info("Page size - ", os.Getpagesize())
+
 	for cpu := 0; cpu < cpuCount; cpu++ {
 		//This is done for only online CPUs
-		cpuReader, err := newPerfPerCPUReader(cpu, 4096, mapFD, mapAPI) 
+		cpuReader, err := newPerfPerCPUReader(cpu, os.Getpagesize(), mapFD, mapAPI) 
 		//err := perfReader.CpuReaders[cpu].newPerfPerCPUReader(cpu, 4096, mapFD, mapAPI)
 		if err != nil {
 			//TODO need cleanup here
