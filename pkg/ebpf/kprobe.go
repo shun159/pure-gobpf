@@ -37,7 +37,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		log.Infof("error opening kprobe_events file: %v", err)
 		return fmt.Errorf("error opening kprobe_events file: %v", err)
 	}
-	defer file.Close()
+	//defer file.Close()
 
 	eventString := fmt.Sprintf("p:kprobes/%s %s", eventName, funcName)
 	_, err = file.WriteString(eventString)
@@ -75,7 +75,7 @@ func KprobeAttach(progFD int, eventName string, funcName string) error {
 		log.Infof("Failed to open perf event %v", err)
 		return fmt.Errorf("Failed to open perf event %v", err)
 	}
-	defer unix.Close(fd)
+	//defer unix.Close(fd)
 
 	log.Infof("Attach bpf program to perf event Prog FD %d Event FD %d", progFD, fd)
 
