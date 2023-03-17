@@ -105,6 +105,13 @@ func NewMmapRingBuffer(ptr unsafe.Pointer, shmmap []byte) *mmapRingBuffer {
 	return res
 }
 
+func memcpy(dst, src unsafe.Pointer, count uintptr) {
+	for i := uintptr(0); i < count; i++ {
+	    b := *(*byte)(unsafe.Pointer(uintptr(src) + i))
+	    *(*byte)(unsafe.Pointer(uintptr(dst) + i)) = b
+	}
+ }
+
 // Read copies "size" bytes from mmaped memory and returns it as go slice
 func (b *mmapRingBuffer) Read(size int) []byte {
 	if size > b.size {
@@ -121,22 +128,29 @@ func (b *mmapRingBuffer) Read(size int) []byte {
 		// the buffer end.
 		// So read 2 bytes and 1 byte from the beginning
 		consumed := int(b.end - uintptr(tailPtr))
+		memcpy(unsafe.Pointer(&res[0]), tailPtr, uintptr(consumed))
+		/*
 		C.shmem_memcpy(
 			tailPtr,
 			unsafe.Pointer(&res[0]),
 			C.size_t(consumed),
 		)
+		*/
+		/*
 		C.shmem_memcpy(
 			b.start,
 			unsafe.Pointer(&res[consumed]),
 			C.size_t(size-consumed),
-		)
+		)*/
+		memcpy(unsafe.Pointer(&res[consumed]), tailPtr, uintptr(size-consumed))
 	} else {
+		/*
 		C.shmem_memcpy(
 			tailPtr,
 			unsafe.Pointer(&res[0]),
 			C.size_t(size),
-		)
+		)*/
+		memcpy(unsafe.Pointer(&res[0]), tailPtr, uintptr(size))
 	}
 
 	// Advance tail
