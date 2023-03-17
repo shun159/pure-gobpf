@@ -11,10 +11,6 @@ package perf_cgo
 #define PERF_RECORD_SAMPLE			9
 #define PERF_RECORD_LOST			2
 
-int get_nprocs()
-{
-	return 1;
-}
 #endif
 
 */
@@ -30,6 +26,11 @@ import (
 	"unsafe"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
+	"golang.org/x/sys/unix"
+)
+
+var (
+	perfEventHeaderSize                  = binary.Size(perfEventHeader{})
 )
 
 type PerfEvents struct {
@@ -113,7 +114,6 @@ func getCPUCount() (int, error) {
 }
 
 func (pe *PerfEvents) StartForAllProcessesAndCPUs(bufferSize int) (<-chan []byte, error) {
-	//nCpus := int(C.get_nprocs())
 
 	nCpus, err := getCPUCount()
 	if err != nil {
@@ -197,22 +197,26 @@ func (pe *PerfEvents) handlePerfEvent(handler *perfEventHandler) {
 	for handler.ringBuffer.DataAvailable() {
 		var header perfEventHeader
 		reader := bytes.NewReader(
-			handler.ringBuffer.Read(C.PERF_EVENT_HEADER_SIZE),
+			//handler.ringBuffer.Read(C.PERF_EVENT_HEADER_SIZE),
+			handler.ringBuffer.Read(perfEventHeaderSize),
 		)
 		binary.Read(reader, binary.LittleEndian, &header)
 
 		data := handler.ringBuffer.Read(
-			int(header.Size - C.PERF_EVENT_HEADER_SIZE),
+			//int(header.Size - C.PERF_EVENT_HEADER_SIZE),
+			int(int(header.Size) - perfEventHeaderSize),
 		)
 
 		switch header.Type {
-		case C.PERF_RECORD_SAMPLE:
+		case unix.PERF_RECORD_SAMPLE:
+		//case C.PERF_RECORD_SAMPLE:
 			// Same as struct perf_event_sample and data_size has the data without header
 			dataSize := binary.LittleEndian.Uint32(data)
 			pe.updatesChannel <- data[4 : dataSize+4]
 			pe.EventsReceived++
 
-		case C.PERF_RECORD_LOST:
+		case unix.PERF_RECORD_LOST:	
+		//case C.PERF_RECORD_LOST:
 			var lost perfEventLost
 			reader := bytes.NewReader(data)
 			binary.Read(reader, binary.LittleEndian, &lost)
