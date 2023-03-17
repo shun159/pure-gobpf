@@ -159,7 +159,6 @@ func (b *mmapRingBuffer) UpdateTail() {
 
 func (b *mmapRingBuffer) DataAvailable() bool {
 	meta_data := (*unix.PerfEventMmapPage)(b.ptr)
-	//b.head = int(C.shmem_get_head(b.ptr))
 	b.head = int(meta_data.Data_head)
 	return b.head != b.tail
 }
