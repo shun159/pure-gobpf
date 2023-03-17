@@ -23,6 +23,9 @@ import "C"
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -73,10 +76,50 @@ func NewPerfEvents(mapFD int, mapAPI ebpf_maps.APIs) (*PerfEvents, error) {
 	}, nil
 }
 
-func (pe *PerfEvents) StartForAllProcessesAndCPUs(bufferSize int) (<-chan []byte, error) {
-	nCpus := int(C.get_nprocs())
+func getCPUCount() (int, error) {
+	/*
+		cmd := exec.Command("nproc")
+		output, err := cmd.Output()
+		if err != nil {
+			return 0, err
+		}
+		n, err := strconv.Atoi(string(output))
+		if err != nil {
+			return 0, err
+		}
+		return n, nil
+	*/
+	path := "/sys/devices/system/cpu/possible"
+	specBytes, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	spec := string(specBytes)
+	if strings.Trim(spec, "\n") == "0" {
+		return 1, nil
+	}
 
-	var err error
+	var low, high int
+	n, err := fmt.Sscanf(spec, "%d-%d\n", &low, &high)
+	if n != 2 || err != nil {
+		return 0, fmt.Errorf("invalid format: %s", spec)
+	}
+	if low != 0 {
+		return 0, fmt.Errorf("CPU spec doesn't start at zero: %s", spec)
+	}
+
+	// cpus is 0 indexed
+	return high + 1, nil
+}
+
+func (pe *PerfEvents) StartForAllProcessesAndCPUs(bufferSize int) (<-chan []byte, error) {
+	//nCpus := int(C.get_nprocs())
+
+	nCpus, err := getCPUCount()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get CPU count: %v", err)
+	}
+
 	var handler *perfEventHandler
 	pe.handlers = make([]*perfEventHandler, nCpus)
 	for cpu := 0; cpu < nCpus; cpu++ {
