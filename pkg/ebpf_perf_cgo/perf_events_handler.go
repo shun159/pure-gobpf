@@ -81,6 +81,7 @@ import "C"
 import (
 	"fmt"
 	"unsafe"
+	"golang.org/x/sys/unix"
 )
 const (
 		errCodeBufferSize = 512
@@ -99,7 +100,7 @@ func NullTerminatedStringToString(val []byte) string {
 }
 // perfEventHandler is responsible for open / close / configure system perf_events
 type perfEventHandler struct {
-	pmuFd     C.int
+	pmuFd     int
 	shMem     unsafe.Pointer
 	shMemSize int
 
@@ -109,13 +110,15 @@ type perfEventHandler struct {
 // newPerfEventHandler opens perf_event on given CPU / PID
 // it also mmap memory of bufferSize to new perf event fd.
 func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error) {
-	var errorBuf [errCodeBufferSize]byte
+	//var errorBuf [errCodeBufferSize]byte
 
 	res := &perfEventHandler{
 		shMemSize: calculateMmapSize(bufferSize),
 	}
 
 	// Create perf event fd
+
+	/*
 	res.pmuFd = C.perf_event_open(
 		C.int(cpu),
 		C.int(pid),
@@ -125,8 +128,33 @@ func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error
 		return nil, fmt.Errorf("Unable to perf_event_open(): %v",
 			NullTerminatedStringToString(errorBuf[:]))
 	}
+	*/
+
+	watermark := 1
+	//log.Infof("NewPerfPerCPUReader %d", cpu)
+	//Open perf event
+	attr := unix.PerfEventAttr{
+		Type:        unix.PERF_TYPE_SOFTWARE,
+		Config:      unix.PERF_COUNT_SW_BPF_OUTPUT,
+		Bits:        unix.PerfBitWatermark,
+		Sample_type: unix.PERF_SAMPLE_RAW,
+		Wakeup:      uint32(watermark),
+	}
+
+	attr.Size = uint32(unsafe.Sizeof(attr))
+
+	var err error
+	res.pmuFd, err = unix.PerfEventOpen(&attr, -1, cpu, -1, unix.PERF_FLAG_FD_CLOEXEC)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to open perf event %v", err)
+	}
+
+	if err := unix.SetNonblock(res.pmuFd, true); err != nil {
+		return nil, err
+	}
 
 	// Create shared memory between kernel and userspace (mmap)
+	/*
 	res.shMem = C.perf_event_mmap(
 		res.pmuFd,
 		C.size_t(res.shMemSize),
@@ -137,8 +165,16 @@ func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error
 		res.pmuFd = 0
 		return nil, fmt.Errorf("Unable to mmap(): %v",
 			NullTerminatedStringToString(errorBuf[:]))
-	}
-	res.ringBuffer = NewMmapRingBuffer(res.shMem)
+	}*/
+
+	shMem, err := unix.Mmap(res.pmuFd, 0, res.shMemSize, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	if err != nil {
+		unix.Close(res.pmuFd)
+		//log.Infof("can't mmap: %v", err)
+		return nil, fmt.Errorf("can't mmap: %v", err)
+	} 
+	res.shMem = unsafe.Pointer(&shMem[0])
+	res.ringBuffer = NewMmapRingBuffer(unsafe.Pointer(res.shMem))
 
 	return res, nil
 }
@@ -148,7 +184,7 @@ func (pe *perfEventHandler) Enable() error {
 	var errorBuf [errCodeBufferSize]byte
 
 	res := C.perf_event_enable(
-		pe.pmuFd,
+		C.int(pe.pmuFd),
 		unsafe.Pointer(&errorBuf[0]), C.size_t(unsafe.Sizeof(errorBuf)), // error message
 	)
 	if res < 0 {
@@ -162,7 +198,7 @@ func (pe *perfEventHandler) Enable() error {
 // Disable disables perf events on this fd
 func (pe *perfEventHandler) Disable() {
 	if pe.pmuFd > 0 {
-		C.perf_event_disable(pe.pmuFd)
+		C.perf_event_disable(C.int(pe.pmuFd))
 		pe.pmuFd = 0
 	}
 }
@@ -179,7 +215,7 @@ func (pe *perfEventHandler) Release() {
 	}
 
 	if pe.pmuFd > 0 {
-		C.close(pe.pmuFd)
+		C.close(C.int(pe.pmuFd))
 		pe.pmuFd = 0
 	}
 }

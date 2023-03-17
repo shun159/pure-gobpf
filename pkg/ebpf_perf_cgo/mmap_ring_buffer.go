@@ -75,6 +75,7 @@ type mmapRingBuffer struct {
 // NewMmapRingBuffer creates mmapRingBuffer instance from
 // pre-created mmap memory pointer ptr
 func NewMmapRingBuffer(ptr unsafe.Pointer) *mmapRingBuffer {
+	
 	start := C.shmem_get_ptr(ptr)
 	size := int(C.shmem_get_size(ptr))
 
@@ -86,6 +87,18 @@ func NewMmapRingBuffer(ptr unsafe.Pointer) *mmapRingBuffer {
 		tail:  int(C.shmem_get_tail(ptr)),
 	}
 
+	/*
+	meta_data := (*unix.PerfEventMmapPage)(ptr)
+	start := atomic.LoadUint64(&meta_data.Data_head)
+	size := meta_data.Data_size
+
+	res := &mmapRingBuffer{
+		ptr:   ptr,
+		start: start,
+		size:  size,
+		end:   uintptr(start) + uintptr(size),
+		tail:  int(C.shmem_get_tail(ptr)),
+	}*/
 	return res
 }
 
