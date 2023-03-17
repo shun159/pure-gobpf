@@ -1,4 +1,4 @@
-package perf_cgo 
+package perf_cgo
 
 /*
 #include <sys/mman.h>
@@ -23,39 +23,6 @@ struct perf_event_attr {
 };
 #endif
 
-// Opens perf event on given cpu_id and/or pid
-// Returns pmu_fd (processor monitoring unit fd)
-static int perf_event_open(int cpu_id, int pid, void *error_buf, size_t error_size)
-{
-    struct perf_event_attr attr = {
-        .sample_type    = PERF_SAMPLE_RAW,
-        .type           = PERF_TYPE_SOFTWARE,
-        .config         = PERF_COUNT_SW_BPF_OUTPUT,
-        .wakeup_events  = 1,
-    };
-
-    // Open perf events for given CPU
-#ifdef __linux
-	int pmu_fd = syscall(__NR_perf_event_open, &attr, pid, cpu_id, -1, 0);
-    if (pmu_fd <= 0) {
-        strncpy(error_buf, strerror(errno), error_size);
-    }
-	return pmu_fd;
-#else
-	return 0;
-#endif
-}
-
-// Enables perf events on pmu_fd create by perf_event_open()
-static int perf_event_enable(int pmu_fd, void *error_buf, size_t error_size)
-{
-    int res = ioctl(pmu_fd, PERF_EVENT_IOC_ENABLE, 0);
-    if (res < 0) {
-        strncpy(error_buf, strerror(errno), error_size);
-    }
-
-    return res;
-}
 
 // Disables perf events on pmu_fd create by perf_event_open()
 static int perf_event_disable(int pmu_fd)
@@ -63,32 +30,21 @@ static int perf_event_disable(int pmu_fd)
     return ioctl(pmu_fd, PERF_EVENT_IOC_DISABLE, 0);
 }
 
-// Makes shared memory between kernel and user spaces (mmap)
-// returns pointer to shared memory
-static void *perf_event_mmap(int perf_map_fd, size_t size, void *error_buf, size_t error_size)
-{
-    void *buf = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, perf_map_fd, 0);
-    if (buf == MAP_FAILED) {
-        strncpy(error_buf, strerror(errno), error_size);
-        return NULL;
-    }
-
-    return buf;
-}
 */
 import "C"
 
 import (
 	"fmt"
 	"unsafe"
+
 	"golang.org/x/sys/unix"
 )
+
 const (
-		errCodeBufferSize = 512
+	errCodeBufferSize = 512
 )
 
 func NullTerminatedStringToString(val []byte) string {
-	// Calculate null terminated string len
 	slen := len(val)
 	for idx, ch := range val {
 		if ch == 0 {
@@ -98,7 +54,7 @@ func NullTerminatedStringToString(val []byte) string {
 	}
 	return string(val[:slen])
 }
-// perfEventHandler is responsible for open / close / configure system perf_events
+
 type perfEventHandler struct {
 	pmuFd     int
 	shMem     unsafe.Pointer
@@ -107,10 +63,7 @@ type perfEventHandler struct {
 	ringBuffer *mmapRingBuffer
 }
 
-// newPerfEventHandler opens perf_event on given CPU / PID
-// it also mmap memory of bufferSize to new perf event fd.
 func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error) {
-	//var errorBuf [errCodeBufferSize]byte
 
 	res := &perfEventHandler{
 		shMemSize: calculateMmapSize(bufferSize),
@@ -118,20 +71,7 @@ func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error
 
 	// Create perf event fd
 
-	/*
-	res.pmuFd = C.perf_event_open(
-		C.int(cpu),
-		C.int(pid),
-		unsafe.Pointer(&errorBuf[0]), C.size_t(unsafe.Sizeof(errorBuf)),
-	)
-	if res.pmuFd <= 0 {
-		return nil, fmt.Errorf("Unable to perf_event_open(): %v",
-			NullTerminatedStringToString(errorBuf[:]))
-	}
-	*/
-
 	watermark := 1
-	//log.Infof("NewPerfPerCPUReader %d", cpu)
 	//Open perf event
 	attr := unix.PerfEventAttr{
 		Type:        unix.PERF_TYPE_SOFTWARE,
@@ -153,26 +93,12 @@ func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error
 		return nil, err
 	}
 
-	// Create shared memory between kernel and userspace (mmap)
-	/*
-	res.shMem = C.perf_event_mmap(
-		res.pmuFd,
-		C.size_t(res.shMemSize),
-		unsafe.Pointer(&errorBuf[0]), C.size_t(unsafe.Sizeof(errorBuf)),
-	)
-	if res.shMem == nil {
-		C.close(res.pmuFd)
-		res.pmuFd = 0
-		return nil, fmt.Errorf("Unable to mmap(): %v",
-			NullTerminatedStringToString(errorBuf[:]))
-	}*/
-
+	// Create shared memory
 	shMem, err := unix.Mmap(res.pmuFd, 0, res.shMemSize, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
 		unix.Close(res.pmuFd)
-		//log.Infof("can't mmap: %v", err)
 		return nil, fmt.Errorf("can't mmap: %v", err)
-	} 
+	}
 	res.shMem = unsafe.Pointer(&shMem[0])
 	res.ringBuffer = NewMmapRingBuffer(unsafe.Pointer(res.shMem), shMem)
 
@@ -181,21 +107,9 @@ func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error
 
 // Enable enables perf events on this fd
 func (pe *perfEventHandler) Enable() error {
-	//var errorBuf [errCodeBufferSize]byte
-
 	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(pe.pmuFd)), uintptr(uint(unix.PERF_EVENT_IOC_ENABLE)), 0); err != 0 {
-		//log.Infof("error enabling perf event: %v", err)
 		return fmt.Errorf("error enabling perf event: %v", err)
 	}
-	/*
-	res := C.perf_event_enable(
-		C.int(pe.pmuFd),
-		unsafe.Pointer(&errorBuf[0]), C.size_t(unsafe.Sizeof(errorBuf)), // error message
-	)
-	if res < 0 {
-		return fmt.Errorf("Unable to perf_event_enable(): %v",
-			NullTerminatedStringToString(errorBuf[:]))
-	}*/
 
 	return nil
 }

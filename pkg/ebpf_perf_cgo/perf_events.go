@@ -1,4 +1,4 @@
-package perf_cgo 
+package perf_cgo
 
 /*
 #ifdef __linux__
@@ -23,26 +23,21 @@ import "C"
 import (
 	"bytes"
 	"encoding/binary"
-	//"fmt"
 	"sync"
 	"unsafe"
+
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
 )
 
-// PerfEvents is a way to interact with Linux's PerfEvents for eBPF cases.
 type PerfEvents struct {
-	// Statistics
 	EventsReceived   int
 	EventsLost       int
 	EventsUnknowType int
 
-	// PollTimeoutMs is timeout for blocking call of poll()
-	// Defaults to 100ms
 	PollTimeoutMs int
 	poller        *perfEventPoller
 
-	//perfMap        Map
-	mapFD int
+	mapFD  int
 	mapAPI ebpf_maps.APIs
 
 	updatesChannel chan []byte
@@ -52,61 +47,35 @@ type PerfEvents struct {
 	handlers []*perfEventHandler
 }
 
-// Go definition for C structs from
-// http://man7.org/linux/man-pages/man2/perf_event_open.2.html
-//
-//	struct perf_event_header {
-//	    __u32   type;
-//	    __u16   misc;
-//	    __u16   size;
-//	}
+// Same as struct perf_event_header
 type perfEventHeader struct {
 	Type uint32
 	Misc uint16
 	Size uint16
 }
 
-//	struct perf_event_lost {
-//	    uint64_t id;
-//	    uint64_t lost;
-//
-// not added: struct sample_id sample_id;
-// }
+// Same as struct perf_event_lost
 type perfEventLost struct {
 	Id   uint64
 	Lost uint64
 }
 
-// NewPerfEvents creates new instance of PerfEvents for eBPF map "m".
-// "m" must be a type of "MapTypePerfEventArray"
 func NewPerfEvents(mapFD int, mapAPI ebpf_maps.APIs) (*PerfEvents, error) {
 	/*
-	if m.GetType() != MapTypePerfEventArray {
-		return nil, fmt.Errorf("Invalid map type '%v'", m.GetType())
-	}*/
+		if m.GetType() != MapTypePerfEventArray {
+			return nil, fmt.Errorf("Invalid map type '%v'", m.GetType())
+		}*/
 
 	return &PerfEvents{
-		//perfMap:       m,
-		mapFD: mapFD,
-		mapAPI: mapAPI,
+		mapFD:         mapFD,
+		mapAPI:        mapAPI,
 		PollTimeoutMs: 100,
 	}, nil
 }
 
-// StartForAllProcessesAndCPUs starts PerfEvent polling on all CPUs for all system processes
-// This mode requires specially organized map: index matches CPU ID.
-// "bufferSize" is ring buffer size for perfEvents. Per CPU.
-// All updates will be sent into returned channel.
 func (pe *PerfEvents) StartForAllProcessesAndCPUs(bufferSize int) (<-chan []byte, error) {
-	// Get ONLINE CPU count.
-	// There maybe confusion between get_nprocs() and GetNumOfPossibleCpus() functions:
-	// - get_nprocs() returns ONLINE CPUs
-	// - GetNumOfPossibleCpus() returns POSSIBLE (including currently offline) CPUs
-	// So space for eBPF maps should be reserved for ALL possible CPUs,
-	// but perfEvents may work only on online CPUs
 	nCpus := int(C.get_nprocs())
 
-	// Create perfEvent handler for all possible CPUs
 	var err error
 	var handler *perfEventHandler
 	pe.handlers = make([]*perfEventHandler, nCpus)
@@ -116,25 +85,13 @@ func (pe *PerfEvents) StartForAllProcessesAndCPUs(bufferSize int) (<-chan []byte
 			// Error handling to be done after for loop
 			break
 		}
-		/*
-		err = pe.perfMap.Update(cpu, int(handler.pmuFd))
-		if err != nil {
-			// Error handling to be done after for loop
-			break
-		}*/
 		err = pe.mapAPI.UpdateMapEntry(uintptr(unsafe.Pointer(&cpu)), uintptr(unsafe.Pointer(&handler.pmuFd)), uint32(pe.mapFD))
 		if err != nil {
-			/*
-			log.Infof("Failed to updated map, check if BPF_ANY is set")
-			unix.Close(perf_fd)
-			return nil, fmt.Errorf("Failed to update map %v", err)
-			*/
 			break
 		}
 		handler.Enable()
 		pe.handlers[cpu] = handler
 	}
-	// Handle loop errors: release allocated resources / return error
 	if err != nil {
 		for _, handler := range pe.handlers {
 			if handler != nil {
@@ -148,17 +105,12 @@ func (pe *PerfEvents) StartForAllProcessesAndCPUs(bufferSize int) (<-chan []byte
 	return pe.updatesChannel, nil
 }
 
-// Stop stops event polling loop
 func (pe *PerfEvents) Stop() {
-	// Stop poller firstly
 	pe.poller.Stop()
-	// Stop poll loop
 	close(pe.stopChannel)
-	// Wait until poll loop stopped, then close updates channel
 	pe.wg.Wait()
 	close(pe.updatesChannel)
 
-	// Release resources
 	for _, handler := range pe.handlers {
 		handler.Release()
 	}
@@ -173,19 +125,16 @@ func (pe *PerfEvents) startLoop() {
 }
 
 func (pe *PerfEvents) loop() {
-	// Setup poller to poll all handlers (one handler per CPU)
 	pe.poller = newPerfEventPoller()
 	for _, handler := range pe.handlers {
 		pe.poller.Add(handler)
 	}
 
-	// Start poller
 	pollerCh := pe.poller.Start(pe.PollTimeoutMs)
 	defer func() {
 		pe.wg.Done()
 	}()
 
-	// Wait until at least one perf event fd becomes readable (has new data)
 	for {
 		select {
 		case handler, ok := <-pollerCh:
@@ -202,38 +151,25 @@ func (pe *PerfEvents) loop() {
 }
 
 func (pe *PerfEvents) handlePerfEvent(handler *perfEventHandler) {
-	// Process all new samples at once
 	for handler.ringBuffer.DataAvailable() {
-		// Read perfEvent header
 		var header perfEventHeader
 		reader := bytes.NewReader(
 			handler.ringBuffer.Read(C.PERF_EVENT_HEADER_SIZE),
 		)
 		binary.Read(reader, binary.LittleEndian, &header)
 
-		// Read PerfEvent data (header.Size is total size of event: header + data)
 		data := handler.ringBuffer.Read(
 			int(header.Size - C.PERF_EVENT_HEADER_SIZE),
 		)
 
-		// Process event
 		switch header.Type {
 		case C.PERF_RECORD_SAMPLE:
-			// Sample defined as:
-			//     struct perf_event_sample {
-			//         struct perf_event_header header;
-			//         uint32_t data_size;
-			//         char data[];
-			//     };
-			// We've already parsed header, so parse only data_size
+			// Same as struct perf_event_sample and data_size has the data without header
 			dataSize := binary.LittleEndian.Uint32(data)
-			// Send data into channel
 			pe.updatesChannel <- data[4 : dataSize+4]
 			pe.EventsReceived++
 
 		case C.PERF_RECORD_LOST:
-			// This is special record type - contains how many record (events)
-			// lost due to small buffer or slow event processing.
 			var lost perfEventLost
 			reader := bytes.NewReader(data)
 			binary.Read(reader, binary.LittleEndian, &lost)
@@ -244,7 +180,5 @@ func (pe *PerfEvents) handlePerfEvent(handler *perfEventHandler) {
 		}
 	}
 
-	// This is ring buffer: move tail forward to indicate
-	// that we've processed some data
 	handler.ringBuffer.UpdateTail()
 }

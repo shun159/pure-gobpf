@@ -1,66 +1,9 @@
 package perf_cgo
 
-/*
-#include <stdint.h>
-#include <poll.h>
-#include <string.h>
-
-#ifdef __linux__
-#include <linux/perf_event.h>
-#else
-// mocks for Mac
-struct perf_event_mmap_page {
-    int data_offset, data_size, data_head, data_tail;
-};
-#endif
-
-static void *shmem_get_ptr(void *shmem)
-{
-    struct perf_event_mmap_page *header = shmem;
-    return shmem + header->data_offset;
-}
-
-static uint64_t shmem_get_size(void *shmem)
-{
-    struct perf_event_mmap_page *header = shmem;
-    return header->data_size;
-}
-
-static uint64_t shmem_get_head(void *shmem)
-{
-    volatile struct perf_event_mmap_page *header = shmem;
-    uint64_t head = header->data_head;
-    asm volatile("" ::: "memory");  // smp_rmb()
-
-    return head;
-}
-
-static uint64_t shmem_get_tail(void *shmem)
-{
-    volatile struct perf_event_mmap_page *header = shmem;
-    return header->data_tail;
-}
-
-// Helper to update ring buffer's tail with Memory Barrier
-static void shmem_set_tail(void *shmem, uint64_t tail)
-{
-    volatile struct perf_event_mmap_page *header = shmem;
-
-    __sync_synchronize(); // smp_mb()
-    header->data_tail = tail;
-}
-
-static void shmem_memcpy(void *shmem, void *buffer, size_t size)
-{
-    memcpy(buffer, shmem, size);
-}
-
-*/
-import "C"
-
 import (
-	"unsafe"
 	"sync/atomic"
+	"unsafe"
+
 	"golang.org/x/sys/unix"
 )
 
@@ -74,25 +17,10 @@ type mmapRingBuffer struct {
 	tail int
 }
 
-// NewMmapRingBuffer creates mmapRingBuffer instance from
-// pre-created mmap memory pointer ptr
 func NewMmapRingBuffer(ptr unsafe.Pointer, shmmap []byte) *mmapRingBuffer {
 
-	/*
-	start := C.shmem_get_ptr(ptr)
-	size := int(C.shmem_get_size(ptr))
-
-	res := &mmapRingBuffer{
-		ptr:   ptr,
-		start: start,
-		size:  size,
-		end:   uintptr(start) + uintptr(size),
-		tail:  int(C.shmem_get_tail(ptr)),
-	}*/
-
-	
 	meta_data := (*unix.PerfEventMmapPage)(ptr)
-	start :=  unsafe.Pointer(&shmmap[meta_data.Data_offset]) 
+	start := unsafe.Pointer(&shmmap[meta_data.Data_offset])
 	size := meta_data.Data_size
 
 	res := &mmapRingBuffer{
@@ -107,12 +35,11 @@ func NewMmapRingBuffer(ptr unsafe.Pointer, shmmap []byte) *mmapRingBuffer {
 
 func memcpy(dst, src unsafe.Pointer, count uintptr) {
 	for i := uintptr(0); i < count; i++ {
-	    b := *(*byte)(unsafe.Pointer(uintptr(src) + i))
-	    *(*byte)(unsafe.Pointer(uintptr(dst) + i)) = b
+		b := *(*byte)(unsafe.Pointer(uintptr(src) + i))
+		*(*byte)(unsafe.Pointer(uintptr(dst) + i)) = b
 	}
- }
+}
 
-// Read copies "size" bytes from mmaped memory and returns it as go slice
 func (b *mmapRingBuffer) Read(size int) []byte {
 	if size > b.size {
 		size = b.size
@@ -129,27 +56,8 @@ func (b *mmapRingBuffer) Read(size int) []byte {
 		// So read 2 bytes and 1 byte from the beginning
 		consumed := int(b.end - uintptr(tailPtr))
 		memcpy(unsafe.Pointer(&res[0]), tailPtr, uintptr(consumed))
-		/*
-		C.shmem_memcpy(
-			tailPtr,
-			unsafe.Pointer(&res[0]),
-			C.size_t(consumed),
-		)
-		*/
-		/*
-		C.shmem_memcpy(
-			b.start,
-			unsafe.Pointer(&res[consumed]),
-			C.size_t(size-consumed),
-		)*/
 		memcpy(unsafe.Pointer(&res[consumed]), tailPtr, uintptr(size-consumed))
 	} else {
-		/*
-		C.shmem_memcpy(
-			tailPtr,
-			unsafe.Pointer(&res[0]),
-			C.size_t(size),
-		)*/
 		memcpy(unsafe.Pointer(&res[0]), tailPtr, uintptr(size))
 	}
 
@@ -159,14 +67,7 @@ func (b *mmapRingBuffer) Read(size int) []byte {
 	return res
 }
 
-// Helper to update tail in shmem metadata page
 func (b *mmapRingBuffer) UpdateTail() {
-	/*
-	C.shmem_set_tail(
-		b.ptr,
-		C.uint64_t(b.tail),
-	)
-	*/
 	meta_data := (*unix.PerfEventMmapPage)(b.ptr)
 	atomic.StoreUint64(&meta_data.Data_tail, uint64(b.tail))
 }
