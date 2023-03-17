@@ -46,7 +46,8 @@ static int perf_events_poll(void *_fds, int cnt, int timeout)
 import "C"
 import (
 	"sync"
-	"unsafe"
+	//"unsafe"
+	"golang.org/x/sys/unix"
 )
 
 type perfEventPoller struct {
@@ -54,19 +55,37 @@ type perfEventPoller struct {
 	wg        sync.WaitGroup
 	fds       []uint32
 	timeoutMs int
+	epollFd int
 
 	stopChannel   chan struct{}
 	updateChannel chan *perfEventHandler
 }
 
 func newPerfEventPoller() *perfEventPoller {
+	pollFD, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
+	if err != nil {
+		return nil
+	}
 	return &perfEventPoller{
 		items: make(map[int]*perfEventHandler),
+		epollFd: pollFD,
 	}
 }
 
 func (p *perfEventPoller) Add(handler *perfEventHandler) {
 	p.items[int(handler.pmuFd)] = handler
+
+	//Add to epoll FD
+	event := unix.EpollEvent{
+		Events: unix.EPOLLIN,
+		Fd:     int32(handler.pmuFd),
+	}
+
+	if err := unix.EpollCtl(p.epollFd, unix.EPOLL_CTL_ADD, handler.pmuFd, &event); err != nil {
+		//log.Infof("Failed to add perfFD to manage epoll: %v", err)
+		//return nil, fmt.Errorf("Failed to add perfFD to manage epoll: %v", err)
+		return
+	}
 }
 
 func (p *perfEventPoller) Start(timeoutMs int) <-chan *perfEventHandler {
@@ -96,6 +115,36 @@ func (p *perfEventPoller) Stop() {
 	close(p.updateChannel)
 }
 
+/*
+type temporaryError interface {
+	Temporary() bool
+}*/
+
+func (p *perfEventPoller) poll(events []unix.EpollEvent) int {
+	var fds []unix.PollFd
+	for _, perfFD := range p.fds {
+		fd := unix.PollFd{Fd: int32(perfFD), Events: unix.POLLIN | unix.POLLERR}
+		fds = append(fds, fd)
+	}
+
+	/*
+	n, err := unix.PerfEventPoll(fds, p.timeoutMs) 
+	if err != nil {
+		n = 0
+	}*/
+	n, err := unix.EpollWait(p.epollFd, events, p.timeoutMs)
+	/*
+	if temp, ok := err.(temporaryError); ok && temp.Temporary() {
+		// Retry the syscall if we were interrupted, see https://github.com/golang/go/issues/20400
+		continue
+	}*/
+	if err != nil {
+		return 0
+	}
+
+	return n
+}
+
 func (p *perfEventPoller) loop() {
 	defer p.wg.Done()
 
@@ -109,16 +158,20 @@ func (p *perfEventPoller) loop() {
 		}
 
 		// Run poll()
+		/*
 		readyCnt := int(C.perf_events_poll(
 			unsafe.Pointer(&p.fds[0]),
 			C.int(len(p.items)),
 			C.int(p.timeoutMs),
-		))
-
+		))*/
+		//Events will be length of fd items
+		events := make([]unix.EpollEvent, len(p.items))
+		readyCnt := p.poll(events)
 		// Send perfEventHandlers with pending updates, if any
-		for i := 0; i < readyCnt; i++ {
+		for _, event := range events[:readyCnt] {
+		//for i := 0; i < readyCnt; i++ {
 			select {
-			case p.updateChannel <- p.items[int(p.fds[i])]:
+			case p.updateChannel <- p.items[int(event.Fd)]:
 
 			case <-p.stopChannel:
 				return

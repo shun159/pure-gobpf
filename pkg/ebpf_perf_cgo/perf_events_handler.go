@@ -181,8 +181,13 @@ func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error
 
 // Enable enables perf events on this fd
 func (pe *perfEventHandler) Enable() error {
-	var errorBuf [errCodeBufferSize]byte
+	//var errorBuf [errCodeBufferSize]byte
 
+	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(pe.pmuFd)), uintptr(uint(unix.PERF_EVENT_IOC_ENABLE)), 0); err != 0 {
+		//log.Infof("error enabling perf event: %v", err)
+		return fmt.Errorf("error enabling perf event: %v", err)
+	}
+	/*
 	res := C.perf_event_enable(
 		C.int(pe.pmuFd),
 		unsafe.Pointer(&errorBuf[0]), C.size_t(unsafe.Sizeof(errorBuf)), // error message
@@ -190,7 +195,7 @@ func (pe *perfEventHandler) Enable() error {
 	if res < 0 {
 		return fmt.Errorf("Unable to perf_event_enable(): %v",
 			NullTerminatedStringToString(errorBuf[:]))
-	}
+	}*/
 
 	return nil
 }
