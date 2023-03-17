@@ -174,7 +174,7 @@ func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error
 		return nil, fmt.Errorf("can't mmap: %v", err)
 	} 
 	res.shMem = unsafe.Pointer(&shMem[0])
-	res.ringBuffer = NewMmapRingBuffer(unsafe.Pointer(res.shMem))
+	res.ringBuffer = NewMmapRingBuffer(unsafe.Pointer(res.shMem), shMem)
 
 	return res, nil
 }
