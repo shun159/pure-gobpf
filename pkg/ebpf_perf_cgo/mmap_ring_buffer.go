@@ -60,7 +60,7 @@ import "C"
 
 import (
 	"unsafe"
-	//"sync/atomic"
+	"sync/atomic"
 	"golang.org/x/sys/unix"
 )
 
@@ -147,14 +147,19 @@ func (b *mmapRingBuffer) Read(size int) []byte {
 
 // Helper to update tail in shmem metadata page
 func (b *mmapRingBuffer) UpdateTail() {
+	/*
 	C.shmem_set_tail(
 		b.ptr,
 		C.uint64_t(b.tail),
 	)
+	*/
+	meta_data := (*unix.PerfEventMmapPage)(b.ptr)
+	atomic.StoreUint64(&meta_data.Data_tail, uint64(b.tail))
 }
 
 func (b *mmapRingBuffer) DataAvailable() bool {
-	b.head = int(C.shmem_get_head(b.ptr))
-
+	meta_data := (*unix.PerfEventMmapPage)(b.ptr)
+	//b.head = int(C.shmem_get_head(b.ptr))
+	b.head = int(meta_data.Data_head)
 	return b.head != b.tail
 }
