@@ -78,18 +78,6 @@ func NewPerfEvents(mapFD int, mapAPI ebpf_maps.APIs) (*PerfEvents, error) {
 }
 
 func getCPUCount() (int, error) {
-	/*
-		cmd := exec.Command("nproc")
-		output, err := cmd.Output()
-		if err != nil {
-			return 0, err
-		}
-		n, err := strconv.Atoi(string(output))
-		if err != nil {
-			return 0, err
-		}
-		return n, nil
-	*/
 	path := "/sys/devices/system/cpu/possible"
 	specBytes, err := os.ReadFile(path)
 	if err != nil {

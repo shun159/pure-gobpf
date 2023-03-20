@@ -49,11 +49,6 @@ func (b *mmapRingBuffer) Read(size int) []byte {
 	tailPtr := unsafe.Pointer(uintptr(b.start) + uintptr(b.tail%b.size))
 
 	if uintptr(tailPtr)+uintptr(size) > b.end {
-		// Requested size requires buffer rollover
-		// [------------------------T-]
-		// e.g. requested 3 bytes, but current tail is just 2 bytes away from
-		// the buffer end.
-		// So read 2 bytes and 1 byte from the beginning
 		consumed := int(b.end - uintptr(tailPtr))
 		memcpy(unsafe.Pointer(&res[0]), tailPtr, uintptr(consumed))
 		memcpy(unsafe.Pointer(&res[consumed]), tailPtr, uintptr(size-consumed))
@@ -61,7 +56,6 @@ func (b *mmapRingBuffer) Read(size int) []byte {
 		memcpy(unsafe.Pointer(&res[0]), tailPtr, uintptr(size))
 	}
 
-	// Advance tail
 	b.tail += size
 
 	return res

@@ -1,41 +1,9 @@
 package perf_cgo
 
-/*
-#include <sys/mman.h>
-#include <unistd.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <string.h>
-
-#ifdef __linux__
-#include <syscall.h>
-#include <linux/perf_event.h>
-#else
-// mocks for Mac
-#define PERF_SAMPLE_RAW             1U << 10
-#define PERF_TYPE_SOFTWARE          1
-#define PERF_COUNT_SW_BPF_OUTPUT    10
-#define PERF_EVENT_IOC_DISABLE      0
-#define PERF_EVENT_IOC_ENABLE       1
-#define __NR_perf_event_open        364
-struct perf_event_attr {
-    int type, config, sample_type, wakeup_events;
-};
-#endif
-
-
-// Disables perf events on pmu_fd create by perf_event_open()
-static int perf_event_disable(int pmu_fd)
-{
-    return ioctl(pmu_fd, PERF_EVENT_IOC_DISABLE, 0);
-}
-
-*/
-import "C"
-
 import (
 	"fmt"
 	"unsafe"
+	"os"
 
 	"golang.org/x/sys/unix"
 )
@@ -58,6 +26,7 @@ func NullTerminatedStringToString(val []byte) string {
 type perfEventHandler struct {
 	pmuFd     int
 	shMem     unsafe.Pointer
+	shMemByte     []byte
 	shMemSize int
 
 	ringBuffer *mmapRingBuffer
@@ -70,7 +39,6 @@ func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error
 	}
 
 	// Create perf event fd
-
 	watermark := 1
 	//Open perf event
 	attr := unix.PerfEventAttr{
@@ -100,12 +68,12 @@ func newPerfEventHandler(cpu, pid int, bufferSize int) (*perfEventHandler, error
 		return nil, fmt.Errorf("can't mmap: %v", err)
 	}
 	res.shMem = unsafe.Pointer(&shMem[0])
+	res.shMemByte = shMem
 	res.ringBuffer = NewMmapRingBuffer(unsafe.Pointer(res.shMem), shMem)
 
 	return res, nil
 }
 
-// Enable enables perf events on this fd
 func (pe *perfEventHandler) Enable() error {
 	if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(pe.pmuFd)), uintptr(uint(unix.PERF_EVENT_IOC_ENABLE)), 0); err != 0 {
 		return fmt.Errorf("error enabling perf event: %v", err)
@@ -114,36 +82,34 @@ func (pe *perfEventHandler) Enable() error {
 	return nil
 }
 
-// Disable disables perf events on this fd
 func (pe *perfEventHandler) Disable() {
 	if pe.pmuFd > 0 {
-		C.perf_event_disable(C.int(pe.pmuFd))
+		if _, _, err := unix.Syscall(unix.SYS_IOCTL, uintptr(int(pe.pmuFd)), uintptr(uint(unix.PERF_EVENT_IOC_DISABLE)), 0); err != 0 {
+			fmt.Errorf("error disabling perf event: %v", err)
+		}
 		pe.pmuFd = 0
 	}
 }
 
-// Release releases allocated resources:
-// - close perf_event fd
-// - unmap shared memory
 func (pe *perfEventHandler) Release() {
 	pe.Disable()
 
 	if pe.shMem != nil {
-		C.munmap(pe.shMem, C.size_t(pe.shMemSize))
+		if err := unix.Munmap(pe.shMemByte); err != nil {
+			fmt.Errorf("Unmap failed but we ignore..")
+		}
+		pe.shMemByte = nil
 		pe.shMem = nil
 	}
 
 	if pe.pmuFd > 0 {
-		C.close(C.int(pe.pmuFd))
+		unix.Close(pe.pmuFd)
 		pe.pmuFd = 0
 	}
 }
 
-// Helper to calculate aligned memory size for mmap.
-// First memory page is reserved for mmap metadata,
-// so allocating +1 page.
 func calculateMmapSize(size int) int {
-	pageSize := int(C.getpagesize())
+	pageSize := os.Getpagesize()
 	pageCnt := size / pageSize
 
 	// Extra page for mmap metadata header
