@@ -58,6 +58,7 @@ type BPFProgram struct {
 	ProgFD      int
 	PinPath     string
 	ProgType    string
+	SubSystem   string
 	SubProgType string
 }
 
@@ -114,6 +115,8 @@ func (m *BpfProgApi) LoadProg(progType string, data []byte, licenseStr string, p
 		prog_type = uint32(netlink.BPF_PROG_TYPE_SCHED_ACT)
 	case "kprobe":
 		prog_type = uint32(netlink.BPF_PROG_TYPE_KPROBE)
+	case "tracepoint":
+		prog_type = uint32(netlink.BPF_PROG_TYPE_TRACEPOINT)	
 	default:
 		prog_type = uint32(netlink.BPF_PROG_TYPE_UNSPEC)
 	}
