@@ -29,7 +29,7 @@ func TracepointAttach(progFD int, subSystem, eventName string) error {
 	}
 
 	//Get the TP ID
-	tracepointIDpath := fmt.Sprintf("/sys/kernel/debug/tracing/events/%s/%s", subSystem, eventName)
+	tracepointIDpath := fmt.Sprintf("/sys/kernel/debug/tracing/events/%s/%s/id", subSystem, eventName)
 	data, err := os.ReadFile(tracepointIDpath)
 	if err != nil {
 		log.Infof("Unable to read the tracepointID: %v", err)
