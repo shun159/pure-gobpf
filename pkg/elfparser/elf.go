@@ -1,29 +1,5 @@
 package elfparser
 
-/*
-#include <stdint.h>
-#include <linux/unistd.h>
-#include <linux/bpf.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-struct bpf_map_def {
-  uint32_t map_type;
-  uint32_t key_size;
-  uint32_t value_size;
-  uint32_t max_entries;
-  uint32_t map_flags;
-  uint32_t pinning;
-  uint32_t inner_map_fd;
-};
-
-#define BPF_MAP_DEF_SIZE sizeof(struct bpf_map_def)
-
-#define BPF_INS_DEF_SIZE sizeof(struct bpf_insn)
-*/
-import "C"
-
 import (
 	"bytes"
 	"debug/elf"
@@ -41,6 +17,20 @@ import (
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 )
 
+var (
+	bpfInsDefSize                  = binary.Size(BPFInsn{})
+	bpfMapDefSize                  = binary.Size(BPFMapDef{})
+)
+
+type BPFMapDef struct {
+  map_type uint32
+  key_size uint32
+  value_size uint32
+  max_entries uint32
+  map_flags uint32
+  pinning uint32
+  inner_map_fd uint32
+}
 //Ref:https://github.com/torvalds/linux/blob/v5.10/samples/bpf/bpf_load.c
 type BPFParser struct {
 	BpfMapAPIs  ebpf_maps.APIs
@@ -120,7 +110,7 @@ func NullTerminatedStringToString(val []byte) string {
 func (c *BPFParser) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File) error {
 	var log = logger.Get()
 	//Replace this TODO
-	mapDefinitionSize := C.BPF_MAP_DEF_SIZE
+	mapDefinitionSize := bpfMapDefSize 
 	GlobalMapData := []ebpf_maps.BpfMapData{}
 
 	data, err := dataMaps.Data()
@@ -245,7 +235,7 @@ func parseRelocationSection(reloSection *elf.Section, elfFile *elf.File) ([]relo
 func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, subSystem string, subProgType string, sectionIndex int, elfFile *elf.File) error {
 	var log = logger.Get()
 
-	insDefSize := uint64(C.BPF_INS_DEF_SIZE)
+	insDefSize := uint64(bpfInsDefSize)
 	data, err := dataProg.Data()
 	if err != nil {
 		return err

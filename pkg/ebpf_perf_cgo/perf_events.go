@@ -1,21 +1,5 @@
 package perf_cgo
 
-/*
-#ifdef __linux__
-#include <linux/perf_event.h>
-#include <sys/sysinfo.h>
-#define PERF_EVENT_HEADER_SIZE		(sizeof(struct perf_event_header))
-#else
-// mocks for Mac
-#define PERF_EVENT_HEADER_SIZE		8
-#define PERF_RECORD_SAMPLE			9
-#define PERF_RECORD_LOST			2
-
-#endif
-
-*/
-import "C"
-
 import (
 	"bytes"
 	"encoding/binary"
@@ -185,26 +169,22 @@ func (pe *PerfEvents) handlePerfEvent(handler *perfEventHandler) {
 	for handler.ringBuffer.DataAvailable() {
 		var header perfEventHeader
 		reader := bytes.NewReader(
-			//handler.ringBuffer.Read(C.PERF_EVENT_HEADER_SIZE),
 			handler.ringBuffer.Read(perfEventHeaderSize),
 		)
 		binary.Read(reader, binary.LittleEndian, &header)
 
 		data := handler.ringBuffer.Read(
-			//int(header.Size - C.PERF_EVENT_HEADER_SIZE),
 			int(int(header.Size) - perfEventHeaderSize),
 		)
 
 		switch header.Type {
 		case unix.PERF_RECORD_SAMPLE:
-		//case C.PERF_RECORD_SAMPLE:
 			// Same as struct perf_event_sample and data_size has the data without header
 			dataSize := binary.LittleEndian.Uint32(data)
 			pe.updatesChannel <- data[4 : dataSize+4]
 			pe.EventsReceived++
 
 		case unix.PERF_RECORD_LOST:	
-		//case C.PERF_RECORD_LOST:
 			var lost perfEventLost
 			reader := bytes.NewReader(data)
 			binary.Read(reader, binary.LittleEndian, &lost)
