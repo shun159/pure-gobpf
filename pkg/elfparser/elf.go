@@ -1,29 +1,5 @@
 package elfparser
 
-/*
- #include <stdint.h>
- #include <linux/unistd.h>
- #include <linux/bpf.h>
- #include <stdlib.h>
- #include <string.h>
- #include <unistd.h>
-
- struct bpf_map_def {
-   uint32_t map_type;
-   uint32_t key_size;
-   uint32_t value_size;
-   uint32_t max_entries;
-   uint32_t map_flags;
-   uint32_t pinning;
-   uint32_t inner_map_fd;
- };
-
-#define BPF_MAP_DEF_SIZE sizeof(struct bpf_map_def)
-
-#define BPF_INS_DEF_SIZE sizeof(struct bpf_insn)
-*/
-import "C"
-
 import (
 	"bytes"
 	"debug/elf"
@@ -42,7 +18,18 @@ import (
 )
 
 var (
-	bpfInsDefSize = binary.Size(BPFInsn{})
+	/*
+	 * C struct of bpf_ins is 8 bytes because of this -
+	 * struct bpf_insn {
+	 *	__u8	code;
+	 * 	__u8	dst_reg:4;
+	 *	__u8	src_reg:4;
+	 * 	__s16	off;
+	 * 	__s32	imm;
+	 *	};
+	 * while go struct will return 9 since we dont have bit fields hence we dec(1).
+	 */
+	bpfInsDefSize = (binary.Size(BPFInsn{}) - 1)
 	bpfMapDefSize = binary.Size(BPFMapDef{})
 )
 
@@ -260,10 +247,8 @@ func parseRelocationSection(reloSection *elf.Section, elfFile *elf.File) ([]relo
 func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, subSystem string, subProgType string, sectionIndex int, elfFile *elf.File) error {
 	var log = logger.Get()
 
-	//insDefSize := bpfInsDefSize
-	insDefSize := uint64(bpfInsDefSize)
+	insDefSize := bpfInsDefSize
 
-	log.Infof("Compare inssize gostruct %d cstruct %d", bpfInsDefSize, insDefSize)
 	data, err := dataProg.Data()
 	if err != nil {
 		return err
@@ -354,7 +339,7 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 					return fmt.Errorf("Failed to Load the prog")
 				}
 
-				log.Infof("Sec '%s': found program '%s' at insn offset %d (%d bytes), code size %d insns (%d bytes)\n", progType, ProgName, secOff/(insDefSize), secOff, progSize/(insDefSize), progSize)
+				log.Infof("Sec '%s': found program '%s' at insn offset %d (%d bytes), code size %d insns (%d bytes)\n", progType, ProgName, secOff/uint64(insDefSize), secOff, progSize/uint64(insDefSize), progSize)
 				if symbol.Value >= dataProg.Addr && symbol.Value < dataProg.Addr+dataProg.Size {
 					// Extract the BPF program data from the section data
 					log.Infof("Data offset - %d", symbol.Value-dataProg.Addr)

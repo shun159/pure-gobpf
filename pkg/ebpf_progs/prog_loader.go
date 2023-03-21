@@ -100,11 +100,9 @@ func (m *BpfProgApi) PinProg(progFD uint32, pinPath string) error {
 	return ebpf_maps.PinObject(progFD, pinPath)
 }
 
-func (m *BpfProgApi) LoadProg(progType string, data []byte, licenseStr string, pinPath string, tempinsDefSize int) (int, error) {
+func (m *BpfProgApi) LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error) {
 	var log = logger.Get()
 
-	insDefSize := C.BPF_INS_DEF_SIZE
-	log.Infof("Prog check size gostruct %d and cstruct %d", tempinsDefSize, insDefSize)
 	var prog_type uint32
 	switch progType {
 	case "xdp":
