@@ -18,19 +18,20 @@ import (
 )
 
 var (
-	bpfInsDefSize                  = binary.Size(BPFInsn{})
-	bpfMapDefSize                  = binary.Size(BPFMapDef{})
+	bpfInsDefSize = binary.Size(BPFInsn{})
+	bpfMapDefSize = binary.Size(BPFMapDef{})
 )
 
 type BPFMapDef struct {
-  map_type uint32
-  key_size uint32
-  value_size uint32
-  max_entries uint32
-  map_flags uint32
-  pinning uint32
-  inner_map_fd uint32
+	map_type     uint32
+	key_size     uint32
+	value_size   uint32
+	max_entries  uint32
+	map_flags    uint32
+	pinning      uint32
+	inner_map_fd uint32
 }
+
 //Ref:https://github.com/torvalds/linux/blob/v5.10/samples/bpf/bpf_load.c
 type BPFParser struct {
 	BpfMapAPIs  ebpf_maps.APIs
@@ -110,7 +111,7 @@ func NullTerminatedStringToString(val []byte) string {
 func (c *BPFParser) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File) error {
 	var log = logger.Get()
 	//Replace this TODO
-	mapDefinitionSize := bpfMapDefSize 
+	mapDefinitionSize := bpfMapDefSize
 	GlobalMapData := []ebpf_maps.BpfMapData{}
 
 	data, err := dataMaps.Data()
@@ -360,9 +361,20 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 			}
 		}
 	}
-	c.ElfContext.Section[progType] = ELFSection{
-		Programs: pgmList,
+
+	elfSection, ok := c.ElfContext.Section[progType]
+	if !ok {
+		// if the progType section does not exist, create a new ELFSection object for it
+		elfSection = ELFSection{
+			Programs: make(map[string]ebpf_progs.BPFProgram),
+		}
 	}
+
+	//This will just run once
+	for pgmName, pgmValue := range pgmList {
+		elfSection.Programs[pgmName] = pgmValue
+	}
+	c.ElfContext.Section[progType] = elfSection
 
 	return nil
 }
@@ -436,7 +448,7 @@ func (c *BPFParser) doLoadELF(r io.ReaderAt) error {
 		var subSystem string
 		if retrievedProgParams == 3 {
 			subSystem = strings.ToLower(splitProgType[1])
-			subProgType = strings.ToLower(splitProgType[2]) 
+			subProgType = strings.ToLower(splitProgType[2])
 			log.Infof("Found subprog type %s", subSystem)
 		}
 		log.Infof("Found the progType %s", progType)

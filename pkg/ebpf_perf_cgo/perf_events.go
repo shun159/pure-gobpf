@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	perfEventHeaderSize                  = binary.Size(perfEventHeader{})
+	perfEventHeaderSize = binary.Size(perfEventHeader{})
 )
 
 type PerfEvents struct {
@@ -184,7 +184,7 @@ func (pe *PerfEvents) handlePerfEvent(handler *perfEventHandler) {
 			pe.updatesChannel <- data[4 : dataSize+4]
 			pe.EventsReceived++
 
-		case unix.PERF_RECORD_LOST:	
+		case unix.PERF_RECORD_LOST:
 			var lost perfEventLost
 			reader := bytes.NewReader(data)
 			binary.Read(reader, binary.LittleEndian, &lost)

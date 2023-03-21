@@ -2,8 +2,8 @@ package perf_cgo
 
 import (
 	"fmt"
-	"unsafe"
 	"os"
+	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
@@ -26,7 +26,7 @@ func NullTerminatedStringToString(val []byte) string {
 type perfEventHandler struct {
 	pmuFd     int
 	shMem     unsafe.Pointer
-	shMemByte     []byte
+	shMemByte []byte
 	shMemSize int
 
 	ringBuffer *mmapRingBuffer

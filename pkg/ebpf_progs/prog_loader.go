@@ -101,7 +101,7 @@ func (m *BpfProgApi) LoadProg(progType string, data []byte, licenseStr string, p
 	case "kprobe":
 		prog_type = uint32(netlink.BPF_PROG_TYPE_KPROBE)
 	case "tracepoint":
-		prog_type = uint32(netlink.BPF_PROG_TYPE_TRACEPOINT)	
+		prog_type = uint32(netlink.BPF_PROG_TYPE_TRACEPOINT)
 	default:
 		prog_type = uint32(netlink.BPF_PROG_TYPE_UNSPEC)
 	}
