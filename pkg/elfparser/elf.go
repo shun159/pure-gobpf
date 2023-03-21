@@ -235,7 +235,7 @@ func parseRelocationSection(reloSection *elf.Section, elfFile *elf.File) ([]relo
 func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, subSystem string, subProgType string, sectionIndex int, elfFile *elf.File) error {
 	var log = logger.Get()
 
-	insDefSize := uint64(bpfInsDefSize)
+	insDefSize := bpfInsDefSize
 	data, err := dataProg.Data()
 	if err != nil {
 		return err
@@ -326,7 +326,7 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 					return fmt.Errorf("Failed to Load the prog")
 				}
 
-				log.Infof("Sec '%s': found program '%s' at insn offset %d (%d bytes), code size %d insns (%d bytes)\n", progType, ProgName, secOff/insDefSize, secOff, progSize/insDefSize, progSize)
+				log.Infof("Sec '%s': found program '%s' at insn offset %d (%d bytes), code size %d insns (%d bytes)\n", progType, ProgName, secOff/uint64(insDefSize), secOff, progSize/uint64(insDefSize), progSize)
 				if symbol.Value >= dataProg.Addr && symbol.Value < dataProg.Addr+dataProg.Size {
 					// Extract the BPF program data from the section data
 					log.Infof("Data offset - %d", symbol.Value-dataProg.Addr)
@@ -340,7 +340,7 @@ func (c *BPFParser) loadElfProgSection(dataProg *elf.Section, reloSection *elf.S
 					log.Infof("Program Data size - %d", len(programData))
 
 					pinPath := "/sys/fs/bpf/globals/" + ProgName
-					progFD, _ := c.BpfProgAPIs.LoadProg(progType, programData, license, pinPath)
+					progFD, _ := c.BpfProgAPIs.LoadProg(progType, programData, license, pinPath, insDefSize)
 					if progFD == -1 {
 						log.Infof("Failed to load prog")
 						return fmt.Errorf("Failed to Load the prog")

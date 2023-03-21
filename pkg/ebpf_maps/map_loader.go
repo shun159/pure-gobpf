@@ -1,19 +1,5 @@
 package ebpf_maps
 
-/*
-#include <linux/unistd.h>
-#include <linux/bpf.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-#define BPF_OBJ_NAME_LEN 16U
-
-#define BPF_INS_DEF_SIZE sizeof(struct bpf_insn)
-
-*/
-import "C"
-
 import (
 	"fmt"
 	"os"

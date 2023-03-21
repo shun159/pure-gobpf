@@ -36,7 +36,7 @@ const (
 
 type APIs interface {
 	PinProg(progFD uint32, pinPath string) error
-	LoadProg(progType string, data []byte, licenseStr string, pinPath string) (int, error)
+	LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error)
 }
 
 type BpfProgApi struct {
@@ -101,10 +101,9 @@ func (m *BpfProgApi) PinProg(progFD uint32, pinPath string) error {
 	return ebpf_maps.PinObject(progFD, pinPath)
 }
 
-func (m *BpfProgApi) LoadProg(progType string, data []byte, licenseStr string, pinPath string) (int, error) {
+func (m *BpfProgApi) LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error) {
 	var log = logger.Get()
 
-	insDefSize := C.BPF_INS_DEF_SIZE
 	var prog_type uint32
 	switch progType {
 	case "xdp":
