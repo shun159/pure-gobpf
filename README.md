@@ -29,7 +29,7 @@ GOPROXY=direct go get github.com/jayanthvn/pure-gobpf
 2. Import the elfparser - 
 
 ```
-goebpfelfparser "gitlab.aws.dev/varavaj/aws-ebpf-gosdk/pkg/elfparser"
+goebpfelfparser "github.com/jayanthvn/pure-gobpf/pkg/elfparser"
 ```
 
 3. Load the elf -
