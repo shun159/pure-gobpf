@@ -142,11 +142,11 @@ func KretprobeAttach(progFD int, eventName string, funcName string) error {
 	}
 
 	//Get the Kprobe ID
-	kprobeIDpath := fmt.Sprintf("/sys/kernel/debug/tracing/events/kprobes/%s/id", eventName)
+	kprobeIDpath := fmt.Sprintf("/sys/kernel/debug/tracing/events/kretprobes/%s/id", eventName)
 	data, err := os.ReadFile(kprobeIDpath)
 	if err != nil {
-		log.Infof("Unable to read the kprobeID: %v", err)
-		return fmt.Errorf("Unable to read the kprobeID: %v", err)
+		log.Infof("Unable to read the kretprobeID: %v", err)
+		return fmt.Errorf("Unable to read the kretprobeID: %v", err)
 	}
 	id := strings.TrimSpace(string(data))
 	eventID, err := strconv.Atoi(id)
