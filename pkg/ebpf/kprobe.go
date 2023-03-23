@@ -134,7 +134,7 @@ func KretprobeAttach(progFD int, eventName string, funcName string) error {
 	}
 	//defer file.Close()
 
-	eventString := fmt.Sprintf("r1024:kretprobes/%s %s", eventName, funcName)
+	eventString := fmt.Sprintf("r4096:kretprobes/%s %s", eventName, funcName)
 	_, err = file.WriteString(eventString)
 	if err != nil {
 		log.Infof("error writing to kprobe_events file: %v", err)
