@@ -464,7 +464,7 @@ func (c *BPFParser) doLoadELF(r io.ReaderAt) error {
 			log.Infof("Found subprog type %s", subSystem)
 		}
 		log.Infof("Found the progType %s", progType)
-		if progType != "xdp" && progType != "tc_cls" && progType != "tc_act" && progType != "kprobe" && progType != "tracepoint" {
+		if progType != "xdp" && progType != "tc_cls" && progType != "tc_act" && progType != "kprobe" && progType != "tracepoint" && progType != "kretprobe" {
 			log.Infof("Not supported program %s", progType)
 			continue
 		}
