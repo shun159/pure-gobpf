@@ -112,6 +112,7 @@ func (m *BpfProgApi) LoadProg(progType string, data []byte, licenseStr string, p
 	case "tc_act":
 		prog_type = uint32(netlink.BPF_PROG_TYPE_SCHED_ACT)
 	case "kprobe":
+		prog_type = uint32(netlink.BPF_PROG_TYPE_KPROBE)
 	case "kretprobe":
 		prog_type = uint32(netlink.BPF_PROG_TYPE_KPROBE)
 	case "tracepoint":
