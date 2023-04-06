@@ -9,10 +9,12 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	"golang.org/x/sys/unix"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
+	perf "github.com/jayanthvn/pure-gobpf/pkg/ebpf_perf"
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_progs"
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 )
@@ -48,6 +50,8 @@ type BPFParser struct {
 	BpfMapAPIs  ebpf_maps.APIs
 	BpfProgAPIs ebpf_progs.APIs
 	ElfContext  ELFContext
+	PerfEvents  *perf.Perf
+	WaitGrp     sync.WaitGroup
 }
 
 type ELFContext struct {
@@ -477,4 +481,24 @@ func (c *BPFParser) doLoadELF(r io.ReaderAt) error {
 	}
 
 	return nil
+}
+
+func (c *BPFParser) InitPerfBuffer(eventTableName string) (<-chan []byte, <-chan int, <-chan int, <-chan int, error) {
+	if mapToUpdate, ok := c.ElfContext.Maps[eventTableName]; ok {
+		var err error
+		c.PerfEvents = &perf.Perf{
+			MapFD:  mapToUpdate.MapFD,
+			MapAPI: c.BpfMapAPIs,
+		}
+
+		eventsReader, eventsReceived, eventsLost, eventsUnknown, err := c.PerfEvents.SetupPerfBuffer()
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		c.WaitGrp = sync.WaitGroup{}
+		return eventsReader, eventsReceived, eventsLost, eventsUnknown, nil
+
+	}
+	return nil, nil, nil, nil, fmt.Errorf("Failed to init perf buffer")
 }
