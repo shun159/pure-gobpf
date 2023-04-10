@@ -149,6 +149,7 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 	var log = logger.Get()
 	loadedPrograms := []BpfProgInfo{}
 	attr := BpfProgAttr{}
+	log.Infof("In get all prog info")
 	for attr.isBpfProgGetNextID() {
 		fileAttr := BpfProgAttr{
 			prog_id: attr.next_id,
@@ -158,6 +159,7 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 			log.Infof("Failed to get program Info")
 			return nil, err
 		}
+		log.Infof("Found prog FD -", progfd)
 		bpfProgInfo := BpfProgInfo{}
 		objInfo := BpfObjGetInfo{
 			bpf_fd:   uint32(progfd),
@@ -177,5 +179,6 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 		log.Infof("Maps linked - ", bpfProgInfo.NrMapIDs)
 		loadedPrograms = append(loadedPrograms, bpfProgInfo)
 	}
+	log.Infof("Done all prog info!!!")
 	return loadedPrograms, nil
 }
