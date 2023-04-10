@@ -100,9 +100,9 @@ type BpfMapAttr struct {
 	Flags uint64
 }
 
-type APIs interface {
+type BpfMapAPIs interface {
 	CreateMap(MapMetaData BpfMapData) (BPFMap, error)
-	PinMap(bpfMap BPFMap, pinPath string) error
+	PinMap(pinPath string) error
 	CreateMapEntry(key, value uintptr, mapFD uint32) error
 	UpdateMapEntry(key, value uintptr, mapFD uint32) error
 	CreateUpdateMap(key, value uintptr, updateFlags uint64, mapFD uint32) error
@@ -110,23 +110,10 @@ type APIs interface {
 	GetFirstMapEntry(nextKey uintptr, mapFD uint32) error
 	GetNextMapEntry(key, nextKey uintptr, mapFD uint32) error
 	GetMapEntry(key, value uintptr, mapFD uint32) error
+	GetMapFD() uint32
 }
 
-type BpfMapApi struct {
-	log       *logger.Logger
-	mountPath string
-	mountDir  string
-}
-
-func New(logLocation *logger.Logger, path string, dir string) (*BpfMapApi, error) {
-	mapApi := &BpfMapApi{}
-	mapApi.log = logLocation
-	mapApi.mountPath = path
-	mapApi.mountDir = dir
-	return mapApi, nil
-}
-
-func (m *BpfMapApi) CreateMap(MapMetaData BpfMapData) (BPFMap, error) {
+func (m *BPFMap) CreateMap(MapMetaData BpfMapData) (BPFMap, error) {
 	var log = logger.Get()
 
 	mapCont := BpfMapData{
@@ -158,20 +145,22 @@ func (m *BpfMapApi) CreateMap(MapMetaData BpfMapData) (BPFMap, error) {
 	}
 
 	log.Infof("Create map done with fd : %d", int(ret))
+
 	bpfMap := BPFMap{
 		MapFD:       uint32(ret),
 		MapMetaData: MapMetaData,
 	}
+	//m.MapFD = uint32(ret)
 	return bpfMap, nil
 }
 
-func (m *BpfMapApi) PinMap(bpfMap BPFMap, pinPath string) error {
+func (m *BPFMap) PinMap(pinPath string) error {
 	var log = logger.Get()
-	if bpfMap.MapMetaData.Def.Pinning == PIN_NONE {
+	if m.MapMetaData.Def.Pinning == PIN_NONE {
 		return nil
 	}
 
-	if bpfMap.MapMetaData.Def.Pinning == PIN_GLOBAL_NS {
+	if m.MapMetaData.Def.Pinning == PIN_GLOBAL_NS {
 
 		err := os.MkdirAll(filepath.Dir(pinPath), 0755)
 		if err != nil {
@@ -188,7 +177,7 @@ func (m *BpfMapApi) PinMap(bpfMap BPFMap, pinPath string) error {
 			return fmt.Errorf("failed to stat %q: %v", pinPath, err)
 		}
 
-		return PinObject(bpfMap.MapFD, pinPath)
+		return PinObject(m.MapFD, pinPath)
 
 	}
 	return nil
@@ -223,16 +212,16 @@ func PinObject(objFD uint32, pinPath string) error {
 	return nil
 }
 
-func (m *BpfMapApi) CreateMapEntry(key, value uintptr, mapFD uint32) error {
+func (m *BPFMap) CreateMapEntry(key, value uintptr, mapFD uint32) error {
 	return m.CreateUpdateMap(key, value, uint64(BPF_NOEXIST), mapFD)
 }
 
 //TODO : This should be updated to behave like update
-func (m *BpfMapApi) UpdateMapEntry(key, value uintptr, mapFD uint32) error {
+func (m *BPFMap) UpdateMapEntry(key, value uintptr, mapFD uint32) error {
 	return m.CreateUpdateMap(key, value, uint64(BPF_ANY), mapFD)
 }
 
-func (m *BpfMapApi) CreateUpdateMap(key, value uintptr, updateFlags uint64, mapFD uint32) error {
+func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64, mapFD uint32) error {
 
 	var log = logger.Get()
 
@@ -260,7 +249,7 @@ func (m *BpfMapApi) CreateUpdateMap(key, value uintptr, updateFlags uint64, mapF
 	return nil
 }
 
-func (m *BpfMapApi) DeleteMapEntry(key uintptr, mapFD uint32) error {
+func (m *BPFMap) DeleteMapEntry(key uintptr, mapFD uint32) error {
 
 	var log = logger.Get()
 
@@ -284,11 +273,11 @@ func (m *BpfMapApi) DeleteMapEntry(key uintptr, mapFD uint32) error {
 }
 
 // To get the first entry pass key as `nil`
-func (m *BpfMapApi) GetFirstMapEntry(nextKey uintptr, mapFD uint32) error {
+func (m *BPFMap) GetFirstMapEntry(nextKey uintptr, mapFD uint32) error {
 	return m.GetNextMapEntry(uintptr(unsafe.Pointer(nil)), nextKey, mapFD)
 }
 
-func (m *BpfMapApi) GetNextMapEntry(key, nextKey uintptr, mapFD uint32) error {
+func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr, mapFD uint32) error {
 
 	var log = logger.Get()
 
@@ -312,7 +301,7 @@ func (m *BpfMapApi) GetNextMapEntry(key, nextKey uintptr, mapFD uint32) error {
 	return nil
 }
 
-func (m *BpfMapApi) GetMapEntry(key, value uintptr, mapFD uint32) error {
+func (m *BPFMap) GetMapEntry(key, value uintptr, mapFD uint32) error {
 
 	var log = logger.Get()
 
@@ -365,7 +354,7 @@ func (m *BpfMapApi) UpdateMapEntry(key uintptr, value uintptr, mapFD uint32) err
 
 }
 */
-func (m *BpfMapApi) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr, mapFD uint32) error {
+func (m *BPFMap) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr, mapFD uint32) error {
 	var log = logger.Get()
 	for k, v := range keyvalue {
 		err := m.UpdateMapEntry(k, v, mapFD)
@@ -376,6 +365,10 @@ func (m *BpfMapApi) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr, mapFD uint3
 	}
 	log.Info("Bulk update is successful for mapFD: %d", int(mapFD))
 	return nil
+}
+
+func (m *BPFMap) GetMapFD() uint32 {
+	return m.MapFD
 }
 
 /*

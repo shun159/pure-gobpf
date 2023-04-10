@@ -22,7 +22,6 @@ var (
 
 type Perf struct {
 	MapFD             uint32
-	MapAPI            ebpf_maps.APIs
 	eventsDataChannel chan []byte
 	receivedEvents    chan int
 	lostEvents        chan int
@@ -115,7 +114,10 @@ func (p *Perf) SetupPerfBuffer() (<-chan []byte, <-chan int, <-chan int, <-chan 
 		}
 
 		// 5.. Update the perf FD in the perf event array
-		err = p.MapAPI.UpdateMapEntry(uintptr(unsafe.Pointer(&cpu)), uintptr(unsafe.Pointer(&buffer.pmuFd)), p.MapFD)
+		bpfMap := &ebpf_maps.BPFMap{
+			MapFD: p.MapFD,
+		}
+		err = bpfMap.UpdateMapEntry(uintptr(unsafe.Pointer(&cpu)), uintptr(unsafe.Pointer(&buffer.pmuFd)), p.MapFD)
 		if err != nil {
 			p.CleanupBuffers()
 			return nil, nil, nil, nil, err

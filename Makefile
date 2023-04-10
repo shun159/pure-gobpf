@@ -1,5 +1,6 @@
 .PHONY: all build-linux 
 
+export GOPROXY = direct
 
 UNAME_ARCH = $(shell uname -m)
 ARCH = $(lastword $(subst :, ,$(filter $(UNAME_ARCH):%,x86_64:amd64 aarch64:arm64)))

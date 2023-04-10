@@ -1,18 +1,5 @@
 package ebpf_progs
 
-/*
-#include <linux/unistd.h>
-#include <linux/bpf.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-#define BPF_OBJ_NAME_LEN 16U
-
-#define BPF_INS_DEF_SIZE sizeof(struct bpf_insn)
-
-*/
-import "C"
 import (
 	"fmt"
 	"os"
@@ -31,25 +18,14 @@ const (
 	BPF_PROG_LOAD   = 5
 	BPF_PROG_ATTACH = 8
 	BPF_PROG_DETACH = 9
+	bpfFS           = "/sys/fs/bpf"
+	//Ref - https://man7.org/linux/man-pages/man2/statfs.2.html
+	BPF_FS_MAGIC = 0xcafe4a11
 )
 
-type APIs interface {
+type BpfProgAPIs interface {
 	PinProg(progFD uint32, pinPath string) error
 	LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error)
-}
-
-type BpfProgApi struct {
-	log       *logger.Logger
-	mountPath string
-	mountDir  string
-}
-
-func New(logLocation *logger.Logger, path string, dir string) (*BpfProgApi, error) {
-	progApi := &BpfProgApi{}
-	progApi.log = logLocation
-	progApi.mountPath = path
-	progApi.mountDir = dir
-	return progApi, nil
 }
 
 type BPFProgram struct {
@@ -64,25 +40,33 @@ type BPFProgram struct {
 func mount_bpf_fs() error {
 	var log = logger.Get()
 	log.Infof("Let's mount BPF FS")
-	err := syscall.Mount("bpf", "/sys/fs/bpf", "bpf", 0, "mode=0700")
+	err := syscall.Mount("bpf", bpfFS, "bpf", 0, "mode=0700")
 	if err != nil {
 		log.Errorf("error mounting bpffs: %v", err)
 	}
 	return err
 }
 
-func (m *BpfProgApi) PinProg(progFD uint32, pinPath string) error {
+func (m *BPFProgram) PinProg(progFD uint32, pinPath string) error {
 	var log = logger.Get()
-	/*
-		err := mount_bpf_fs()
-		if err != nil{
+
+	var statfs syscall.Statfs_t
+	err := syscall.Statfs(bpfFS, &statfs)
+	if err != nil {
+		fmt.Println("Error:", err)
+		log.Infof("error checking BPF FS %v", err)
+		return fmt.Errorf("error checking BPF FS %v", err)
+	}
+
+	if statfs.Type != BPF_FS_MAGIC {
+		err = mount_bpf_fs()
+		if err != nil {
 			log.Errorf("error mounting bpffs: %v", err)
 			return err
 		}
+	}
 
-	*/
-
-	err := os.MkdirAll(filepath.Dir(pinPath), 0755)
+	err = os.MkdirAll(filepath.Dir(pinPath), 0755)
 	if err != nil {
 		log.Infof("error creating directory %q: %v", filepath.Dir(pinPath), err)
 		return fmt.Errorf("error creating directory %q: %v", filepath.Dir(pinPath), err)
@@ -100,7 +84,7 @@ func (m *BpfProgApi) PinProg(progFD uint32, pinPath string) error {
 	return ebpf_maps.PinObject(progFD, pinPath)
 }
 
-func (m *BpfProgApi) LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error) {
+func (m *BPFProgram) LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error) {
 	var log = logger.Get()
 
 	var prog_type uint32

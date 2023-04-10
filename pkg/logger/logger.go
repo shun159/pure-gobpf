@@ -12,9 +12,9 @@ type Logger struct {
 }
 
 const (
-	defaultLogFilePath = "/var/log/aws-routed-eni/ebpf-sdk.log"
-	//defaultLogFilePath = "ebpf-sdk.log"
-	envLogFilePath = "AWS_EBPF_SDK_LOG_FILE"
+	//defaultLogFilePath = "/var/log/aws-routed-eni/ebpf-sdk.log"
+	defaultLogFilePath = "ebpf-sdk.log"
+	envLogFilePath     = "AWS_EBPF_SDK_LOG_FILE"
 )
 
 var log *Logger
