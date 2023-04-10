@@ -102,7 +102,7 @@ func (attr *BpfProgAttr) isBpfProgGetNextID() bool {
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		BPF_PROG_GET_NEXT_ID,
-		uintptr(unsafe.Pointer(&attr)),
+		uintptr(unsafe.Pointer(attr)),
 		unsafe.Sizeof(attr),
 	)
 	if errno != 0 {
@@ -119,7 +119,7 @@ func (attr *BpfProgAttr) BpfProgGetFDbyID() (int, error) {
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		BPF_PROG_GET_FD_BY_ID,
-		uintptr(unsafe.Pointer(&attr)),
+		uintptr(unsafe.Pointer(attr)),
 		unsafe.Sizeof(attr),
 	)
 	if errno != 0 {
@@ -134,7 +134,7 @@ func (objattr *BpfObjGetInfo) BpfGetProgramInfoForFD() error {
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		BPF_OBJ_GET_INFO_BY_FD,
-		uintptr(unsafe.Pointer(&objattr)),
+		uintptr(unsafe.Pointer(objattr)),
 		unsafe.Sizeof(objattr),
 	)
 	if errno != 0 {
