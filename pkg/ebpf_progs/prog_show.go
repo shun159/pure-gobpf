@@ -3,6 +3,7 @@ package ebpf_progs
 import (
 	"syscall"
 	"unsafe"
+	"runtime"
 
 	"golang.org/x/sys/unix"
 
@@ -135,7 +136,7 @@ func (objattr *BpfObjGetInfo) BpfGetProgramInfoForFD() error {
 		unix.SYS_BPF,
 		BPF_OBJ_GET_INFO_BY_FD,
 		uintptr(unsafe.Pointer(objattr)),
-		unsafe.Sizeof(objattr),
+		unsafe.Sizeof(*objattr),
 	)
 	if errno != 0 {
 		log.Infof("Failed to get object info by FD - ret %d and err %s", int(ret), errno)
@@ -161,11 +162,11 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 			return nil, err
 		}
 		log.Infof("Found prog FD - %d", progfd)
-		/*
-		bpfProgInfo := BpfProgInfo{}
+		//bpfProgInfo := BpfProgInfo{}
+		var bpfProgInfo BpfProgInfo 
 		objInfo := BpfObjGetInfo{
 			bpf_fd:   uint32(progfd),
-			info_len: uint32(unsafe.Sizeof(BpfProgInfo{})),
+			info_len: uint32(unsafe.Sizeof(bpfProgInfo)),
 			info:     uintptr(unsafe.Pointer(&bpfProgInfo)),
 		}
 
@@ -175,12 +176,12 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 			return nil, err
 
 		}
+		runtime.KeepAlive(progfd)
 
 		log.Infof("TYPE - ", bpfProgInfo.Type)
 		log.Infof("Prog Name - ", string(bpfProgInfo.Name[:]))
 		log.Infof("Maps linked - ", bpfProgInfo.NrMapIDs)
 		loadedPrograms = append(loadedPrograms, bpfProgInfo)
-		*/
 	}
 	log.Infof("Done all prog info!!!")
 	return loadedPrograms, nil
