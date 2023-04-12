@@ -1,6 +1,6 @@
-# pure-gobpf
+# aws-ebpf-sdk-go
 
-This is a SDK to load BPF programs implemented in golang. The SDK internally calls the bpf() system calls to load the programs and maps defined in the elf. Initial release will support only attaching TC and XDP but will support all map types.
+This is a golang based SDK to load eBPF programs and maps. The SDK internally calls the bpf() system calls from unix package to load the programs and maps defined in the elf. The SDK supports attaching Kprobes, Tracepoint probes, traffic classifiers and XDP. Additionally supports perf event buffers for 5.4 kernels and ring buffer for 5.10 onwards kernel.
 
 Contributions welcome!
 
@@ -23,13 +23,13 @@ In your application,
 1. Get the latest SDK -
 
 ```
-GOPROXY=direct go get github.com/jayanthvn/pure-gobpf
+GOPROXY=direct go get github.com/aws/aws-ebpf-sdk-go
 ```
 
 2. Import the elfparser - 
 
 ```
-goebpfelfparser "gitlab.aws.dev/varavaj/aws-ebpf-gosdk/pkg/elfparser"
+goebpfelfparser "github.com/aws/aws-ebpf-sdk-go/pkg/elfparser"
 ```
 
 3. Load the elf -
@@ -72,7 +72,7 @@ type ELFMap struct {
 1. Import the ebpf package - 
 
 ```
-goebpf "github.com/jayanthvn/pure-gobpf/pkg/ebpf"
+goebpf "github.com/aws/aws-ebpf-sdk-go/pkg/ebpf"
 ```
 
 2. Attach XDP -
@@ -92,7 +92,7 @@ err = goebpf.XDPAttach(hostVethName, progFD)
 1. Import the ebpf package - 
 
 ```
-goebpf "github.com/jayanthvn/pure-gobpf/pkg/ebpf"
+goebpf "github.com/aws/aws-ebpf-sdk-go/pkg/ebpf"
 ```
 
 2. Attach TC - 
