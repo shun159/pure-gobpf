@@ -201,11 +201,11 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 	return loadedPrograms, nil
 }
 
-func (attr *BpfProgAttr) BpfGetObject() (int, error) {
+func (attr *BpfObjGet) BpfGetObject() (int, error) {
 	var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_PROG_GET_OBJECT,
+		BPF_OBJECT_GET,
 		uintptr(unsafe.Pointer(attr)),
 		unsafe.Sizeof(*attr),
 	)
@@ -219,15 +219,15 @@ func (attr *BpfProgAttr) BpfGetObject() (int, error) {
 func BpfGetProgFromPinPath(pinPath string) (BpfProgInfo, error) {
 	var log = logger.Get()
 	if len(pinPath) == 0 {
-		return nil, fmt.Errorf("Invalid pinPath")
+		return BpfProgInfo{}, fmt.Errorf("Invalid pinPath")
 	}
 
-	objInfo := BpfObjGetInfo{
+	objInfo := BpfObjGet{
 		pathname: uintptr(unsafe.Pointer(&pinPath)),
 	}
 
 	progFD, err := objInfo.BpfGetObject()
-	runtime.KeepAlive(progfd)
+	runtime.KeepAlive(progFD)
 
 	log.Infof("Got progFD -", progFD)
 	return BpfProgInfo{}, nil
