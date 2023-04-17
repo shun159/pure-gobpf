@@ -223,8 +223,9 @@ func BpfGetProgFromPinPath(pinPath string) (BpfProgInfo, error) {
 		return BpfProgInfo{}, fmt.Errorf("Invalid pinPath")
 	}
 
+	cPath := []byte(pinPath + "\x00")
 	objInfo := BpfObjGet{
-		pathname: uintptr(unsafe.Pointer(&pinPath)),
+		pathname: uintptr(unsafe.Pointer(&cPath[0])),
 	}
 
 	progFD, err := objInfo.BpfGetObject()
