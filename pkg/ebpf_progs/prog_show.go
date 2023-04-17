@@ -1,9 +1,10 @@
 package ebpf_progs
 
 import (
+	"fmt"
+	"runtime"
 	"syscall"
 	"unsafe"
-	"runtime"
 
 	"golang.org/x/sys/unix"
 
@@ -98,13 +99,26 @@ type BpfObjGetInfo struct {
 	info     uintptr
 }
 
+/*
+ *	struct { anonymous struct used by BPF_OBJ_* commands
+ *	__aligned_u64	pathname;
+ *	__u32		bpf_fd;
+ *	__u32		file_flags;
+ * };
+ */
+type BpfObjGet struct {
+	pathname   uintptr
+	bpf_fd     uint32
+	file_flags uint32
+}
+
 func (attr *BpfProgAttr) isBpfProgGetNextID() bool {
 	var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		BPF_PROG_GET_NEXT_ID,
 		uintptr(unsafe.Pointer(attr)),
-		unsafe.Sizeof(attr),
+		unsafe.Sizeof(*attr),
 	)
 	if errno != 0 {
 		log.Infof("Done get_next_id for Prog - ret %d and err %s", int(ret), errno)
@@ -121,7 +135,7 @@ func (attr *BpfProgAttr) BpfProgGetFDbyID() (int, error) {
 		unix.SYS_BPF,
 		BPF_PROG_GET_FD_BY_ID,
 		uintptr(unsafe.Pointer(attr)),
-		unsafe.Sizeof(attr),
+		unsafe.Sizeof(*attr),
 	)
 	if errno != 0 {
 		log.Infof("Failed to get Prog FD - ret %d and err %s", int(ret), errno)
@@ -163,7 +177,7 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 		}
 		log.Infof("Found prog FD - %d", progfd)
 		//bpfProgInfo := BpfProgInfo{}
-		var bpfProgInfo BpfProgInfo 
+		var bpfProgInfo BpfProgInfo
 		objInfo := BpfObjGetInfo{
 			bpf_fd:   uint32(progfd),
 			info_len: uint32(unsafe.Sizeof(bpfProgInfo)),
@@ -185,4 +199,36 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 	}
 	log.Infof("Done all prog info!!!")
 	return loadedPrograms, nil
+}
+
+func (attr *BpfProgAttr) BpfGetObject() (int, error) {
+	var log = logger.Get()
+	ret, _, errno := unix.Syscall(
+		unix.SYS_BPF,
+		BPF_PROG_GET_OBJECT,
+		uintptr(unsafe.Pointer(attr)),
+		unsafe.Sizeof(*attr),
+	)
+	if errno != 0 {
+		log.Infof("Failed to get Prog FD - ret %d and err %s", int(ret), errno)
+		return 0, errno
+	}
+	return int(ret), nil
+}
+
+func BpfGetProgFromPinPath(pinPath string) (BpfProgInfo, error) {
+	var log = logger.Get()
+	if len(pinPath) == 0 {
+		return nil, fmt.Errorf("Invalid pinPath")
+	}
+
+	objInfo := BpfObjGetInfo{
+		pathname: uintptr(unsafe.Pointer(&pinPath)),
+	}
+
+	progFD, err := objInfo.BpfGetObject()
+	runtime.KeepAlive(progfd)
+
+	log.Infof("Got progFD -", progFD)
+	return BpfProgInfo{}, nil
 }
