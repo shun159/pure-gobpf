@@ -161,6 +161,27 @@ func (objattr *BpfObjGetInfo) BpfGetProgramInfoForFD() error {
 	return nil
 }
 
+func getBPFprogInfo(progFD int) (BpfProgInfo, error) {
+	var log = logger.Get()
+	var bpfProgInfo BpfProgInfo
+	objInfo := BpfObjGetInfo{
+		bpf_fd:   uint32(progFD),
+		info_len: uint32(unsafe.Sizeof(bpfProgInfo)),
+		info:     uintptr(unsafe.Pointer(&bpfProgInfo)),
+	}
+
+	err := objInfo.BpfGetProgramInfoForFD()
+	if err != nil {
+		log.Infof("Failed to get program Info for FD - ", progFD)
+		return BpfProgInfo{}, err
+	}
+
+	log.Infof("TYPE - ", bpfProgInfo.Type)
+	log.Infof("Prog Name - ", string(bpfProgInfo.Name[:]))
+	log.Infof("Maps linked - ", bpfProgInfo.NrMapIDs)
+	return bpfProgInfo, nil
+}
+
 func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 	var log = logger.Get()
 	loadedPrograms := []BpfProgInfo{}
@@ -177,25 +198,13 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 			return nil, err
 		}
 		log.Infof("Found prog FD - %d", progfd)
-		//bpfProgInfo := BpfProgInfo{}
-		var bpfProgInfo BpfProgInfo
-		objInfo := BpfObjGetInfo{
-			bpf_fd:   uint32(progfd),
-			info_len: uint32(unsafe.Sizeof(bpfProgInfo)),
-			info:     uintptr(unsafe.Pointer(&bpfProgInfo)),
-		}
-
-		err = objInfo.BpfGetProgramInfoForFD()
+		bpfProgInfo, err := getBPFprogInfo(progfd)
 		if err != nil {
-			log.Infof("Failed to get program Info for FD - ", progfd)
+			log.Infof("Failed to get program Info for FD", progfd)
 			return nil, err
-
 		}
 		runtime.KeepAlive(progfd)
 
-		log.Infof("TYPE - ", bpfProgInfo.Type)
-		log.Infof("Prog Name - ", string(bpfProgInfo.Name[:]))
-		log.Infof("Maps linked - ", bpfProgInfo.NrMapIDs)
 		loadedPrograms = append(loadedPrograms, bpfProgInfo)
 	}
 	log.Infof("Done all prog info!!!")
@@ -219,6 +228,7 @@ func (attr *BpfObjGet) BpfGetObject() (int, error) {
 
 func BpfGetProgFromPinPath(pinPath string) (BpfProgInfo, error) {
 	var log = logger.Get()
+	log.Infof("Printing pinpath - %s ", pinPath)
 	if len(pinPath) == 0 {
 		return BpfProgInfo{}, fmt.Errorf("Invalid pinPath")
 	}
@@ -236,6 +246,12 @@ func BpfGetProgFromPinPath(pinPath string) (BpfProgInfo, error) {
 	}
 	runtime.KeepAlive(progFD)
 
-	log.Infof("Got progFD -", progFD)
-	return BpfProgInfo{}, nil
+	log.Infof("Got progFD - %d", progFD)
+	bpfProgInfo, err := getBPFprogInfo(progFD)
+	if err != nil {
+		log.Infof("Failed to get program Info for FD - %d", progFD)
+		return bpfProgInfo, err
+	}
+
+	return bpfProgInfo, nil
 }
