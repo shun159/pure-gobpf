@@ -206,7 +206,7 @@ func (attr *BpfObjGet) BpfGetObject() (int, error) {
 	var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_OBJECT_GET,
+		BPF_OBJ_GET,
 		uintptr(unsafe.Pointer(attr)),
 		unsafe.Sizeof(*attr),
 	)
