@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	BPF_OBJ_GET            = 7
 	BPF_PROG_GET_NEXT_ID   = 11
 	BPF_PROG_GET_FD_BY_ID  = 13
 	BPF_OBJ_GET_INFO_BY_FD = 15
@@ -227,6 +228,11 @@ func BpfGetProgFromPinPath(pinPath string) (BpfProgInfo, error) {
 	}
 
 	progFD, err := objInfo.BpfGetObject()
+	if err != nil {
+		log.Infof("Failed to get object")
+		return BpfProgInfo{}, err
+
+	}
 	runtime.KeepAlive(progFD)
 
 	log.Infof("Got progFD -", progFD)
