@@ -56,7 +56,7 @@ type BpfMapInfo struct {
  *	};
  */
 
-type BpfMapAttr struct {
+type BpfMapShowAttr struct {
 	map_id     uint32
 	next_id    uint32
 	open_flags uint32
@@ -89,7 +89,7 @@ type BpfObjGet struct {
 	file_flags uint32
 }
 
-func (attr *BpfMapAttr) isBpfMapGetNextID() bool {
+func (attr *BpfMapShowAttr) isBpfMapGetNextID() bool {
 	var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
@@ -106,7 +106,7 @@ func (attr *BpfMapAttr) isBpfMapGetNextID() bool {
 	return true
 }
 
-func (attr *BpfMapAttr) BpfMapGetFDbyID() (int, error) {
+func (attr *BpfMapShowAttr) BpfMapGetFDbyID() (int, error) {
 	var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
@@ -160,11 +160,11 @@ func getBPFmapInfo(mapFD int) (BpfMapInfo, error) {
 func BpfGetAllMapInfo() ([]BpfMapInfo, error) {
 	var log = logger.Get()
 	loadedMaps := []BpfMapInfo{}
-	attr := BpfMapAttr{}
+	attr := BpfMapShowAttr{}
 	log.Infof("In get all prog info")
 	for attr.isBpfMapGetNextID() {
 		log.Infof("Got ID - %d", attr.next_id)
-		fileAttr := BpfMapAttr{
+		fileAttr := BpfMapShowAttr{
 			map_id: attr.next_id,
 		}
 		mapfd, err := fileAttr.BpfMapGetFDbyID()

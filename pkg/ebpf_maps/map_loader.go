@@ -30,22 +30,18 @@ const (
 	BPF_MAP_TYPE_DEVMAP           = 14
 
 	// BPF syscall command constants. Must match enum bpf_cmd from linux/bpf.h
-	BPF_MAP_CREATE         = 0
-	BPF_MAP_LOOKUP_ELEM    = 1
-	BPF_MAP_UPDATE_ELEM    = 2
-	BPF_MAP_DELETE_ELEM    = 3
-	BPF_MAP_GET_NEXT_KEY   = 4
-	BPF_PROG_LOAD          = 5
-	BPF_OBJ_PIN            = 6
-	BPF_OBJ_GET            = 7
-	BPF_PROG_ATTACH        = 8
-	BPF_PROG_DETACH        = 9
-	BPF_PROG_TEST_RUN      = 10
-	BPF_PROG_GET_NEXT_ID   = 11
-	BPF_MAP_GET_NEXT_ID    = 12
-	BPF_PROG_GET_FD_BY_ID  = 13
-	BPF_MAP_GET_FD_BY_ID   = 14
-	BPF_OBJ_GET_INFO_BY_FD = 15
+	BPF_MAP_CREATE        = 0
+	BPF_MAP_LOOKUP_ELEM   = 1
+	BPF_MAP_UPDATE_ELEM   = 2
+	BPF_MAP_DELETE_ELEM   = 3
+	BPF_MAP_GET_NEXT_KEY  = 4
+	BPF_PROG_LOAD         = 5
+	BPF_OBJ_PIN           = 6
+	BPF_PROG_ATTACH       = 8
+	BPF_PROG_DETACH       = 9
+	BPF_PROG_TEST_RUN     = 10
+	BPF_PROG_GET_NEXT_ID  = 11
+	BPF_PROG_GET_FD_BY_ID = 13
 
 	// Flags for BPF_MAP_UPDATE_ELEM. Must match values from linux/bpf.h
 	BPF_ANY     = 0

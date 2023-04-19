@@ -37,8 +37,8 @@ type BpfProgInfo struct {
 	MapIDs               uint64
 	Name                 [BPFObjNameLen]byte
 	IfIndex              uint32
-	GPLCompatible        uint32
-	_                    uint32
+	GPLCompatible        uint32 `strcut:"bitfield"`
+	Pad                  uint32 `strcut:"pad"`
 	NetnsDev             uint64
 	NetnsIno             uint64
 	NrJitedKsyms         uint32

@@ -8,8 +8,10 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 
@@ -33,6 +35,9 @@ var (
 	 */
 	bpfInsDefSize = (binary.Size(BPFInsn{}) - 1)
 	bpfMapDefSize = binary.Size(BPFMapDef{})
+	bpfFS         = "/sys/fs/bpf"
+	//Ref - https://man7.org/linux/man-pages/man2/statfs.2.html
+	BPF_FS_MAGIC = 0xcafe4a11
 )
 
 type BPFMapDef struct {
@@ -62,6 +67,11 @@ type ELFSection struct {
 	// Each sections will have a program but a single section type can have multiple programs
 	// like tc_cls
 	Programs map[string]ebpf_progs.BPFProgram // Index by program name
+}
+
+type RecoverBPFdata struct {
+	Programs ebpf_progs.BPFProgram       // Return the programs
+	Maps     map[string]ebpf_maps.BPFMap // List of associated maps
 }
 
 //https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L71
@@ -507,4 +517,36 @@ func (c *BPFParser) InitPerfBuffer(eventTableName string) (<-chan []byte, <-chan
 
 	}
 	return nil, nil, nil, nil, fmt.Errorf("Failed to init perf buffer")
+}
+
+func RecoverAllBpfProgramsAndMaps() ([]RecoverBPFdata, error) {
+	var log = logger.Get()
+	_, err := os.Stat(bpfFS)
+	if err != nil {
+		log.Infof("BPF FS director is not present")
+		return nil, fmt.Errorf("BPF directory is not present %v", err)
+	}
+
+	var statfs syscall.Statfs_t
+	if err := syscall.Statfs(bpfFS, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
+		log.Infof("BPF FS is mounted")
+		//Pass DS here
+		if err := filepath.Walk(bpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !fsinfo.IsDir() {
+				log.Infof("Dumping pinpaths - ", pinPath)
+			}
+			return nil
+		}); err != nil {
+			log.Infof("Error walking bpfdirectory:", err)
+			return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
+		}
+	} else {
+		log.Infof("error checking BPF FS, might not be mounted %v", err)
+		return nil, fmt.Errorf("error checking BPF FS might not be mounted %v", err)
+	}
+	//Return DS here
+	return nil, nil
 }
