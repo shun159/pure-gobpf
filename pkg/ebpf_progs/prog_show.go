@@ -59,10 +59,10 @@ type BpfProgInfo struct {
 	ProgTags             uint64
 	RunTimeNS            uint64
 	RunCnt               uint64
-	RecursionMisses      uint64
-	VerifiedInsns        uint32
-	AttachBTFObjID       uint32
-	AttachBTFID          uint32
+	//RecursionMisses      uint64
+	//VerifiedInsns        uint32
+	//AttachBTFObjID       uint32
+	//AttachBTFID          uint32
 }
 
 /*
