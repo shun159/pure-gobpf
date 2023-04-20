@@ -57,7 +57,7 @@ type BpfMapInfo struct {
  */
 
 type BpfMapShowAttr struct {
-	map_id     uint32
+	Map_id     uint32
 	next_id    uint32
 	open_flags uint32
 }
@@ -102,7 +102,7 @@ func (attr *BpfMapShowAttr) isBpfMapGetNextID() bool {
 		return false
 	}
 
-	attr.map_id = attr.next_id
+	attr.Map_id = attr.next_id
 	return true
 }
 
@@ -137,7 +137,7 @@ func (objattr *BpfObjGetInfo) BpfGetMapInfoForFD() error {
 	return nil
 }
 
-func getBPFmapInfo(mapFD int) (BpfMapInfo, error) {
+func GetBPFmapInfo(mapFD int) (BpfMapInfo, error) {
 	var log = logger.Get()
 	var bpfMapInfo BpfMapInfo
 	objInfo := BpfObjGetInfo{
@@ -165,7 +165,7 @@ func BpfGetAllMapInfo() ([]BpfMapInfo, error) {
 	for attr.isBpfMapGetNextID() {
 		log.Infof("Got ID - %d", attr.next_id)
 		fileAttr := BpfMapShowAttr{
-			map_id: attr.next_id,
+			Map_id: attr.next_id,
 		}
 		mapfd, err := fileAttr.BpfMapGetFDbyID()
 		if err != nil {
@@ -173,7 +173,7 @@ func BpfGetAllMapInfo() ([]BpfMapInfo, error) {
 			return nil, err
 		}
 		log.Infof("Found map FD - %d", mapfd)
-		bpfMapInfo, err := getBPFmapInfo(mapfd)
+		bpfMapInfo, err := GetBPFmapInfo(mapfd)
 		if err != nil {
 			log.Infof("Failed to get map Info for FD", mapfd)
 			return nil, err
@@ -222,7 +222,7 @@ func BpfGetMapFromPinPath(pinPath string) (BpfMapInfo, error) {
 	runtime.KeepAlive(mapFD)
 
 	log.Infof("Got progFD - %d", mapFD)
-	bpfMapInfo, err := getBPFmapInfo(mapFD)
+	bpfMapInfo, err := GetBPFmapInfo(mapFD)
 	if err != nil {
 		log.Infof("Failed to get map Info for FD - %d", mapFD)
 		return bpfMapInfo, err

@@ -65,8 +65,8 @@ type ELFSection struct {
 }
 
 type RecoverBPFdata struct {
-	Programs ebpf_progs.BPFProgram       // Return the programs
-	Maps     map[string]ebpf_maps.BPFMap // List of associated maps
+	Programs ebpf_progs.BPFProgram // Return the programs
+	Maps     []ebpf_maps.BPFMap    // List of associated maps
 }
 
 //https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L71
@@ -112,18 +112,6 @@ func LoadBpfFile(path, customizedPinPath string) (*ELFContext, error) {
 		return nil, err
 	}
 	return c, nil
-}
-
-func NullTerminatedStringToString(val []byte) string {
-	// Calculate null terminated string len
-	slen := len(val)
-	for idx, ch := range val {
-		if ch == 0 {
-			slen = idx
-			break
-		}
-	}
-	return string(val[:slen])
 }
 
 func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File, bpfMapApi ebpf_maps.BpfMapAPIs, customizedPinPath string) error {
@@ -524,43 +512,76 @@ func RecoverAllBpfProgramsAndMaps() ([]RecoverBPFdata, error) {
 	}
 
 	var statfs syscall.Statfs_t
-
+	//Pass DS here
+	loadedPrograms := []RecoverBPFdata{}
 	if err := syscall.Statfs(bpfFS, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
 		log.Infof("BPF FS is mounted")
-		//Pass DS here
-		//loadedPrograms := []RecoverBPFdata{}
-		//recoveredBPFdata := RecoverBPFdata{}
+
 		if err := filepath.Walk(progbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 			if !fsinfo.IsDir() {
 				log.Infof("Dumping pinpaths - ", pinPath)
+				pgmData := ebpf_progs.BPFProgram{
+					PinPath: pinPath,
+				}
+				mapData := []ebpf_maps.BPFMap{}
 				//Ref : https://github.com/libbpf/bpftool/blob/259f40fd5bde67025beb1371d269c91bbe5d42ed/src/prog.c#L615
 				bpfProgInfo, progFD, err := ebpf_progs.BpfGetProgFromPinPath(pinPath)
 				if err != nil {
 					log.Infof("Failed to progInfo for pinPath %s", pinPath)
 					return err
 				}
+				pgmData.ProgFD = progFD
+				//Conv type to string here
+				//pgmData.ProgType = bpfProgInfo.Type
+
 				if bpfProgInfo.NrMapIDs > 0 {
 					log.Infof("Have associated maps to link")
-					_, err := ebpf_progs.BpfGetMapInfoFromProgInfo(progFD, bpfProgInfo.NrMapIDs)
+					_, associatedBpfMapList, associatedBPFMapFDs, err := ebpf_progs.BpfGetMapInfoFromProgInfo(progFD, bpfProgInfo.NrMapIDs)
 					if err != nil {
 						log.Infof("Failed to get associated maps")
 						return err
 					}
+					for mapInfoIdx := 0; mapInfoIdx < len(associatedBpfMapList); mapInfoIdx++ {
+						bpfMapInfo := associatedBpfMapList[mapInfoIdx]
+						newMapFD := associatedBPFMapFDs[mapInfoIdx]
+						recoveredBpfMap := ebpf_maps.BPFMap{}
+
+						//Fill BPF map
+						recoveredBpfMap.MapFD = uint32(newMapFD)
+
+						//Fill BPF map metadata
+						recoveredBpfMapMetaData := ebpf_maps.BpfMapData{
+							Def: ebpf_maps.BpfMapDef{
+								Type:       bpfMapInfo.Type,
+								KeySize:    bpfMapInfo.KeySize,
+								ValueSize:  bpfMapInfo.ValueSize,
+								MaxEntries: bpfMapInfo.MaxEntries,
+								Flags:      bpfMapInfo.MapFlags,
+							},
+						}
+						recoveredBpfMap.MapMetaData = recoveredBpfMapMetaData
+						mapData = append(mapData, recoveredBpfMap)
+					}
+
 				}
+				recoveredBPFdata := RecoverBPFdata{
+					Programs: pgmData,
+					Maps:     mapData,
+				}
+				loadedPrograms = append(loadedPrograms, recoveredBPFdata)
 			}
 			return nil
 		}); err != nil {
 			log.Infof("Error walking bpfdirectory:", err)
 			return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
 		}
-		//loadedPrograms = append(loadedPrograms, recoveredBPFdata)
 	} else {
 		log.Infof("error checking BPF FS, might not be mounted %v", err)
 		return nil, fmt.Errorf("error checking BPF FS might not be mounted %v", err)
 	}
 	//Return DS here
-	return nil, nil
+	return loadedPrograms, nil
 }

@@ -1,133 +1,13 @@
 package ebpf_progs
 
-/*
-#include <errno.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <linux/types.h>
-#include <linux/unistd.h>
-
-#define ptr_to_u64(ptr) ((__u64)(unsigned long)(ptr))
-
-
-enum bpf_cmd {
-	BPF_MAP_CREATE,
-	BPF_MAP_LOOKUP_ELEM,
-	BPF_MAP_UPDATE_ELEM,
-	BPF_MAP_DELETE_ELEM,
-	BPF_MAP_GET_NEXT_KEY,
-	BPF_PROG_LOAD,
-	BPF_OBJ_PIN,
-	BPF_OBJ_GET,
-	BPF_PROG_ATTACH,
-	BPF_PROG_DETACH,
-	BPF_PROG_TEST_RUN,
-	BPF_PROG_GET_NEXT_ID,
-	BPF_MAP_GET_NEXT_ID,
-	BPF_PROG_GET_FD_BY_ID,
-	BPF_MAP_GET_FD_BY_ID,
-	BPF_OBJ_GET_INFO_BY_FD,
-      };
-      
-      // Max length of eBPF object name
-      #define BPF_OBJ_NAME_LEN 16U
-      
-      // Length of eBPF program tag size
-      #define BPF_TAG_SIZE 8U
-      
-      // clang-format off
-      union bpf_attr {
-	  struct { 
-	      __u32   map_type;   
-	      __u32   key_size;  
-	      __u32   value_size; 
-	      __u32   max_entries;    
-	      __u32   map_flags;  
-	      __u32   inner_map_fd;   
-	      __u32   numa_node;  
-	      char    map_name[BPF_OBJ_NAME_LEN];
-	  };
-      
-	  struct { 
-	      __u32       map_fd;
-	      __aligned_u64   key;
-	      union {
-		  __aligned_u64 value;
-		  __aligned_u64 next_key;
-	      };
-	      __u64       flags;
-	  };
-      
-	  struct { 
-	      __u32       prog_type;  
-	      __u32       insn_cnt;
-	      __aligned_u64   insns;
-	      __aligned_u64   license;
-	      __u32       log_level;  
-	      __u32       log_size;  
-	      __aligned_u64   log_buf;   
-	      __u32       kern_version;   
-	      __u32       prog_flags;
-	      char        prog_name[BPF_OBJ_NAME_LEN];
-	      __u32       prog_ifindex;   
-	  };
-      
-	  struct { 
-	      __aligned_u64   pathname;
-	      __u32       bpf_fd;
-	      __u32       file_flags;
-	  };
-      
-	  struct { 
-	      __u32       target_fd;  
-	      __u32       attach_bpf_fd;  
-	      __u32       attach_type;
-	      __u32       attach_flags;
-	  };
-      
-	  struct { 
-	      union {
-		  __u32       start_id;
-		  __u32       prog_id;
-		  __u32       map_id;
-	      };
-	      __u32       next_id;
-	      __u32       open_flags;
-	  };
-      
-	  struct {
-	      __u32       bpf_fd;
-	      __u32       info_len;
-	      __aligned_u64   info;
-	  } info;
-      } __attribute__((aligned(8)));
-
-static int ebpf_obj_get_info_by_fd(__u32 fd, void *info, __u32 info_len,
-		void *log_buf, size_t log_size)
-{
-	union bpf_attr attr = {};
-	attr.info.bpf_fd = fd;
-	attr.info.info = ptr_to_u64(info);
-	attr.info.info_len = info_len;
-	int res = syscall(__NR_bpf, BPF_OBJ_GET_INFO_BY_FD, &attr, sizeof(attr));
-	strncpy(log_buf, strerror(errno), log_size);
-	return res;
-}
-*/
-import "C"
-
 import (
 	"fmt"
 	"runtime"
-	//"syscall"
 	"unsafe"
-	//"bytes"
-	//"encoding/binary"
 
 	"golang.org/x/sys/unix"
 
+	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 )
 
@@ -281,7 +161,6 @@ func (objattr *BpfObjGetInfo) BpfGetProgramInfoForFD() error {
 	return nil
 }
 
-
 func GetBPFprogInfo(progFD int) (BpfProgInfo, error) {
 	var log = logger.Get()
 	var bpfProgInfo BpfProgInfo
@@ -301,100 +180,10 @@ func GetBPFprogInfo(progFD int) (BpfProgInfo, error) {
 	log.Infof("Prog Name - %s", string(bpfProgInfo.Name[:]))
 	log.Infof("Maps linked - %d", bpfProgInfo.NrMapIDs)
 
-	/*
-	//Trying CGO way
-	var infoBuf [1024]byte
-	objInfo = BpfObjGetInfo{
-		bpf_fd:   uint32(progFD),
-		info_len: uint32(unsafe.Sizeof(infoBuf)),
-		info:     uintptr(unsafe.Pointer(&infoBuf[0])),
-	}
-	err = objInfo.BpfGetProgramInfoForFD()
-	if err != nil {
-		log.Infof("Failed to get program Info for FD - ", progFD)
-		return BpfProgInfo{}, err
-	}
-	
-	// Read program info from buffer
-	var rawInfo struct {
-		Type                      uint32
-		Id                        uint32
-		Tag                       [C.BPF_TAG_SIZE]byte
-		JitedProgramLen           uint32
-		XlatedProgramLen          uint32
-		JitedProgramInstructions  uint64
-		XlatedProgramInstructions uint64
-		LoadTime                  int64 // in ns since system boot
-		CreatedByUid              uint32
-		MapIdsLen                 uint32
-		MapIds                    uint64
-		Name                      [C.BPF_OBJ_NAME_LEN]byte
-	}
-	reader := bytes.NewReader(infoBuf[:])
-	if err := binary.Read(reader, binary.LittleEndian, &rawInfo); err != nil {
-		return BpfProgInfo{},err
-	}
-
-	log.Infof("JAY GO Found map id len %d", rawInfo.MapIdsLen)
-	*/
-	
 	return bpfProgInfo, nil
 }
 
-/*
-func NullTerminatedStringToString(val []byte) string {
-	// Calculate null terminated string len
-	slen := len(val)
-	for idx, ch := range val {
-		if ch == 0 {
-			slen = idx
-			break
-		}
-	}
-	return string(val[:slen])
-}
-
-func GetBPFprogInfoCgo(fd int) (error) {
-	var log = logger.Get()
-	var logBuf [512]byte
-	var infoBuf [1024]byte
-
-	// Get program information
-	{
-		res := C.ebpf_obj_get_info_by_fd(C.__u32(fd),
-			unsafe.Pointer(&infoBuf[0]), C.__u32(len(infoBuf)),
-			unsafe.Pointer(&logBuf[0]), C.size_t(unsafe.Sizeof(logBuf)))
-		if res == -1 {
-			return fmt.Errorf("ebpf_obj_get_info_by_fd() failed: %v",
-				NullTerminatedStringToString(logBuf[:]))
-		}
-	}
-
-	// Read program info from buffer
-	var rawInfo struct {
-		Type                      uint32
-		Id                        uint32
-		Tag                       [C.BPF_TAG_SIZE]byte
-		JitedProgramLen           uint32
-		XlatedProgramLen          uint32
-		JitedProgramInstructions  uint64
-		XlatedProgramInstructions uint64
-		LoadTime                  int64 // in ns since system boot
-		CreatedByUid              uint32
-		MapIdsLen                 uint32
-		MapIds                    uint64
-		Name                      [C.BPF_OBJ_NAME_LEN]byte
-	}
-	reader := bytes.NewReader(infoBuf[:])
-	if err := binary.Read(reader, binary.LittleEndian, &rawInfo); err != nil {
-		return err
-	}
-
-	log.Infof("JAY CGO Found map id len %d", rawInfo.MapIdsLen)
-	return nil
-}
-*/
-func BpfGetMapInfoFromProgInfo(progFD int, numMaps uint32) (BpfProgInfo, error) {
+func BpfGetMapInfoFromProgInfo(progFD int, numMaps uint32) (BpfProgInfo, []ebpf_maps.BpfMapInfo, []int, error) {
 	var log = logger.Get()
 	associatedMaps := make([]uint32, numMaps)
 	newBpfProgInfo := BpfProgInfo{
@@ -411,17 +200,37 @@ func BpfGetMapInfoFromProgInfo(progFD int, numMaps uint32) (BpfProgInfo, error) 
 	err := objInfo.BpfGetProgramInfoForFD()
 	if err != nil {
 		log.Infof("Failed to get program Info for FD - ", progFD)
-		return BpfProgInfo{}, err
+		return BpfProgInfo{}, nil, nil, err
 	}
 
 	log.Infof("TYPE - %d", newBpfProgInfo.Type)
 	log.Infof("Prog Name - %s", string(newBpfProgInfo.Name[:]))
 	log.Infof("Maps linked - %d", newBpfProgInfo.NrMapIDs)
 	//Printing associated maps
-	for i := 0; i < len(associatedMaps); i++ {
-		log.Infof("%d", associatedMaps[i])
+	loadedMaps := []ebpf_maps.BpfMapInfo{}
+	loadedMapsFDs := make([]int, 0)
+	for mapIdx := 0; mapIdx < len(associatedMaps); mapIdx++ {
+		log.Infof("MAP ID - %d", associatedMaps[mapIdx])
+
+		fileAttr := ebpf_maps.BpfMapShowAttr{
+			Map_id: associatedMaps[mapIdx],
+		}
+		mapfd, err := fileAttr.BpfMapGetFDbyID()
+		if err != nil {
+			log.Infof("Failed to get map Info")
+			return BpfProgInfo{}, nil, nil, err
+		}
+		log.Infof("Found map FD - %d", mapfd)
+
+		bpfMapInfo, err := ebpf_maps.GetBPFmapInfo(mapfd)
+		if err != nil {
+			log.Infof("Failed to get map Info for FD", mapfd)
+			return BpfProgInfo{}, nil, nil, err
+		}
+		loadedMaps = append(loadedMaps, bpfMapInfo)
+		loadedMapsFDs = append(loadedMapsFDs, mapfd)
 	}
-	return newBpfProgInfo, nil
+	return newBpfProgInfo, loadedMaps, loadedMapsFDs, nil
 }
 
 func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
