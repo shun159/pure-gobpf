@@ -6,11 +6,103 @@ package ebpf_progs
 #include <time.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <linux/bpf.h>
 #include <linux/types.h>
 #include <linux/unistd.h>
 
 #define ptr_to_u64(ptr) ((__u64)(unsigned long)(ptr))
+
+
+enum bpf_cmd {
+	BPF_MAP_CREATE,
+	BPF_MAP_LOOKUP_ELEM,
+	BPF_MAP_UPDATE_ELEM,
+	BPF_MAP_DELETE_ELEM,
+	BPF_MAP_GET_NEXT_KEY,
+	BPF_PROG_LOAD,
+	BPF_OBJ_PIN,
+	BPF_OBJ_GET,
+	BPF_PROG_ATTACH,
+	BPF_PROG_DETACH,
+	BPF_PROG_TEST_RUN,
+	BPF_PROG_GET_NEXT_ID,
+	BPF_MAP_GET_NEXT_ID,
+	BPF_PROG_GET_FD_BY_ID,
+	BPF_MAP_GET_FD_BY_ID,
+	BPF_OBJ_GET_INFO_BY_FD,
+      };
+      
+      // Max length of eBPF object name
+      #define BPF_OBJ_NAME_LEN 16U
+      
+      // Length of eBPF program tag size
+      #define BPF_TAG_SIZE 8U
+      
+      // clang-format off
+      union bpf_attr {
+	  struct { 
+	      __u32   map_type;   
+	      __u32   key_size;  
+	      __u32   value_size; 
+	      __u32   max_entries;    
+	      __u32   map_flags;  
+	      __u32   inner_map_fd;   
+	      __u32   numa_node;  
+	      char    map_name[BPF_OBJ_NAME_LEN];
+	  };
+      
+	  struct { 
+	      __u32       map_fd;
+	      __aligned_u64   key;
+	      union {
+		  __aligned_u64 value;
+		  __aligned_u64 next_key;
+	      };
+	      __u64       flags;
+	  };
+      
+	  struct { 
+	      __u32       prog_type;  
+	      __u32       insn_cnt;
+	      __aligned_u64   insns;
+	      __aligned_u64   license;
+	      __u32       log_level;  
+	      __u32       log_size;  
+	      __aligned_u64   log_buf;   
+	      __u32       kern_version;   
+	      __u32       prog_flags;
+	      char        prog_name[BPF_OBJ_NAME_LEN];
+	      __u32       prog_ifindex;   
+	  };
+      
+	  struct { 
+	      __aligned_u64   pathname;
+	      __u32       bpf_fd;
+	      __u32       file_flags;
+	  };
+      
+	  struct { 
+	      __u32       target_fd;  
+	      __u32       attach_bpf_fd;  
+	      __u32       attach_type;
+	      __u32       attach_flags;
+	  };
+      
+	  struct { 
+	      union {
+		  __u32       start_id;
+		  __u32       prog_id;
+		  __u32       map_id;
+	      };
+	      __u32       next_id;
+	      __u32       open_flags;
+	  };
+      
+	  struct {
+	      __u32       bpf_fd;
+	      __u32       info_len;
+	      __aligned_u64   info;
+	  } info;
+      } __attribute__((aligned(8)));
 
 static int ebpf_obj_get_info_by_fd(__u32 fd, void *info, __u32 info_len,
 		void *log_buf, size_t log_size)
