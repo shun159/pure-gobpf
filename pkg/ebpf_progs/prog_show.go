@@ -121,7 +121,7 @@ import "C"
 import (
 	"fmt"
 	"runtime"
-	"syscall"
+	//"syscall"
 	"unsafe"
 	"bytes"
 	"encoding/binary"
@@ -151,7 +151,7 @@ type BpfProgInfo struct {
 	XlatedProgLen        uint32
 	JitedProgInsns       uint64
 	XlatedProgInsns      uint64
-	LoadTime             syscall.Timespec
+	LoadTime             int64
 	CreatedByUID         uint32
 	NrMapIDs             uint32
 	MapIDs               uint64
@@ -300,6 +300,42 @@ func GetBPFprogInfo(progFD int) (BpfProgInfo, error) {
 	log.Infof("TYPE - %d", bpfProgInfo.Type)
 	log.Infof("Prog Name - %s", string(bpfProgInfo.Name[:]))
 	log.Infof("Maps linked - %d", bpfProgInfo.NrMapIDs)
+
+	//Trying CGO way
+	var infoBuf [1024]byte
+	objInfo = BpfObjGetInfo{
+		bpf_fd:   uint32(progFD),
+		info_len: uint32(unsafe.Sizeof(infoBuf)),
+		info:     uintptr(unsafe.Pointer(&infoBuf[0])),
+	}
+	err = objInfo.BpfGetProgramInfoForFD()
+	if err != nil {
+		log.Infof("Failed to get program Info for FD - ", progFD)
+		return BpfProgInfo{}, err
+	}
+	
+	// Read program info from buffer
+	var rawInfo struct {
+		Type                      uint32
+		Id                        uint32
+		Tag                       [C.BPF_TAG_SIZE]byte
+		JitedProgramLen           uint32
+		XlatedProgramLen          uint32
+		JitedProgramInstructions  uint64
+		XlatedProgramInstructions uint64
+		LoadTime                  int64 // in ns since system boot
+		CreatedByUid              uint32
+		MapIdsLen                 uint32
+		MapIds                    uint64
+		Name                      [C.BPF_OBJ_NAME_LEN]byte
+	}
+	reader := bytes.NewReader(infoBuf[:])
+	if err := binary.Read(reader, binary.LittleEndian, &rawInfo); err != nil {
+		return BpfProgInfo{},err
+	}
+
+	log.Infof("JAY GO Found map id len %d", rawInfo.MapIdsLen)
+	
 	return bpfProgInfo, nil
 }
 
