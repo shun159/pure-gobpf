@@ -161,7 +161,7 @@ func (objattr *BpfObjGetInfo) BpfGetProgramInfoForFD() error {
 	return nil
 }
 
-func getBPFprogInfo(progFD int) (BpfProgInfo, error) {
+func GetBPFprogInfo(progFD int) (BpfProgInfo, error) {
 	var log = logger.Get()
 	var bpfProgInfo BpfProgInfo
 	objInfo := BpfObjGetInfo{
@@ -228,7 +228,7 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 			return nil, err
 		}
 		log.Infof("Found prog FD - %d", progfd)
-		bpfProgInfo, err := getBPFprogInfo(progfd)
+		bpfProgInfo, err := GetBPFprogInfo(progfd)
 		if err != nil {
 			log.Infof("Failed to get program Info for FD", progfd)
 			return nil, err
@@ -277,7 +277,7 @@ func BpfGetProgFromPinPath(pinPath string) (BpfProgInfo, int, error) {
 	runtime.KeepAlive(progFD)
 
 	log.Infof("Got progFD - %d", progFD)
-	bpfProgInfo, err := getBPFprogInfo(progFD)
+	bpfProgInfo, err := GetBPFprogInfo(progFD)
 	if err != nil {
 		log.Infof("Failed to get program Info for FD - %d", progFD)
 		return bpfProgInfo, -1, err
