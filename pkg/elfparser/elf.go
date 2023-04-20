@@ -36,6 +36,7 @@ var (
 	bpfInsDefSize = (binary.Size(BPFInsn{}) - 1)
 	bpfMapDefSize = binary.Size(BPFMapDef{})
 	bpfFS         = "/sys/fs/bpf"
+	progbpfFS     = "/sys/fs/bpf/globals/aws/programs/"
 	//Ref - https://man7.org/linux/man-pages/man2/statfs.2.html
 	BPF_FS_MAGIC = 0xcafe4a11
 )
@@ -194,7 +195,7 @@ func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, el
 		if len(customizedPinPath) != 0 {
 			mapNameStr = customizedPinPath + "_" + mapNameStr
 		}
-		 
+
 		pinPath := "/sys/fs/bpf/globals/aws/maps/" + mapNameStr
 		bpfMap.PinMap(pinPath)
 
@@ -527,19 +528,35 @@ func RecoverAllBpfProgramsAndMaps() ([]RecoverBPFdata, error) {
 	if err := syscall.Statfs(bpfFS, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
 		log.Infof("BPF FS is mounted")
 		//Pass DS here
-
-		if err := filepath.Walk(bpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
+		//loadedPrograms := []RecoverBPFdata{}
+		//recoveredBPFdata := RecoverBPFdata{}
+		if err := filepath.Walk(progbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 			if !fsinfo.IsDir() {
 				log.Infof("Dumping pinpaths - ", pinPath)
+				//Ref : https://github.com/libbpf/bpftool/blob/259f40fd5bde67025beb1371d269c91bbe5d42ed/src/prog.c#L615
+				bpfProgInfo, progFD, err := ebpf_progs.BpfGetProgFromPinPath(pinPath)
+				if err != nil {
+					log.Infof("Failed to progInfo for pinPath %s", pinPath)
+					return err
+				}
+				if bpfProgInfo.NrMapIDs > 0 {
+					log.Infof("Have associated maps to link")
+					_, err := ebpf_progs.BpfGetMapInfoFromProgInfo(progFD, bpfProgInfo.NrMapIDs)
+					if err != nil {
+						log.Infof("Failed to get associated maps")
+						return err
+					}
+				}
 			}
 			return nil
 		}); err != nil {
 			log.Infof("Error walking bpfdirectory:", err)
 			return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
 		}
+		//loadedPrograms = append(loadedPrograms, recoveredBPFdata)
 	} else {
 		log.Infof("error checking BPF FS, might not be mounted %v", err)
 		return nil, fmt.Errorf("error checking BPF FS might not be mounted %v", err)
