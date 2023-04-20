@@ -123,8 +123,8 @@ import (
 	"runtime"
 	//"syscall"
 	"unsafe"
-	"bytes"
-	"encoding/binary"
+	//"bytes"
+	//"encoding/binary"
 
 	"golang.org/x/sys/unix"
 
@@ -301,6 +301,7 @@ func GetBPFprogInfo(progFD int) (BpfProgInfo, error) {
 	log.Infof("Prog Name - %s", string(bpfProgInfo.Name[:]))
 	log.Infof("Maps linked - %d", bpfProgInfo.NrMapIDs)
 
+	/*
 	//Trying CGO way
 	var infoBuf [1024]byte
 	objInfo = BpfObjGetInfo{
@@ -335,10 +336,12 @@ func GetBPFprogInfo(progFD int) (BpfProgInfo, error) {
 	}
 
 	log.Infof("JAY GO Found map id len %d", rawInfo.MapIdsLen)
+	*/
 	
 	return bpfProgInfo, nil
 }
 
+/*
 func NullTerminatedStringToString(val []byte) string {
 	// Calculate null terminated string len
 	slen := len(val)
@@ -390,7 +393,7 @@ func GetBPFprogInfoCgo(fd int) (error) {
 	log.Infof("JAY CGO Found map id len %d", rawInfo.MapIdsLen)
 	return nil
 }
-
+*/
 func BpfGetMapInfoFromProgInfo(progFD int, numMaps uint32) (BpfProgInfo, error) {
 	var log = logger.Get()
 	associatedMaps := make([]uint32, numMaps)
