@@ -99,13 +99,13 @@ type BpfMapAttr struct {
 type BpfMapAPIs interface {
 	CreateMap(MapMetaData BpfMapData) (BPFMap, error)
 	PinMap(pinPath string) error
-	CreateMapEntry(key, value uintptr, mapFD uint32) error
-	UpdateMapEntry(key, value uintptr, mapFD uint32) error
-	CreateUpdateMap(key, value uintptr, updateFlags uint64, mapFD uint32) error
-	DeleteMapEntry(key uintptr, mapFD uint32) error
-	GetFirstMapEntry(nextKey uintptr, mapFD uint32) error
-	GetNextMapEntry(key, nextKey uintptr, mapFD uint32) error
-	GetMapEntry(key, value uintptr, mapFD uint32) error
+	CreateMapEntry(key, value uintptr) error
+	UpdateMapEntry(key, value uintptr) error
+	CreateUpdateMap(key, value uintptr, updateFlags uint64) error
+	DeleteMapEntry(key uintptr) error
+	GetFirstMapEntry(nextKey uintptr) error
+	GetNextMapEntry(key, nextKey uintptr) error
+	GetMapEntry(key, value uintptr) error
 	GetMapFD() uint32
 }
 
@@ -146,7 +146,6 @@ func (m *BPFMap) CreateMap(MapMetaData BpfMapData) (BPFMap, error) {
 		MapFD:       uint32(ret),
 		MapMetaData: MapMetaData,
 	}
-	//m.MapFD = uint32(ret)
 	return bpfMap, nil
 }
 
@@ -208,21 +207,21 @@ func PinObject(objFD uint32, pinPath string) error {
 	return nil
 }
 
-func (m *BPFMap) CreateMapEntry(key, value uintptr, mapFD uint32) error {
-	return m.CreateUpdateMap(key, value, uint64(BPF_NOEXIST), mapFD)
+func (m *BPFMap) CreateMapEntry(key, value uintptr) error {
+	return m.CreateUpdateMap(key, value, uint64(BPF_NOEXIST))
 }
 
 //TODO : This should be updated to behave like update
-func (m *BPFMap) UpdateMapEntry(key, value uintptr, mapFD uint32) error {
-	return m.CreateUpdateMap(key, value, uint64(BPF_ANY), mapFD)
+func (m *BPFMap) UpdateMapEntry(key, value uintptr) error {
+	return m.CreateUpdateMap(key, value, uint64(BPF_ANY))
 }
 
-func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64, mapFD uint32) error {
+func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64) error {
 
 	var log = logger.Get()
 
 	attr := BpfMapAttr{
-		MapFD: mapFD,
+		MapFD: m.MapFD,
 		Flags: updateFlags,
 		Key:   uint64(key),
 		Value: uint64(value),
@@ -245,12 +244,12 @@ func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64, mapFD u
 	return nil
 }
 
-func (m *BPFMap) DeleteMapEntry(key uintptr, mapFD uint32) error {
+func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 
 	var log = logger.Get()
 
 	attr := BpfMapAttr{
-		MapFD: mapFD,
+		MapFD: m.MapFD,
 		Key:   uint64(key),
 	}
 	ret, _, errno := unix.Syscall(
@@ -269,16 +268,16 @@ func (m *BPFMap) DeleteMapEntry(key uintptr, mapFD uint32) error {
 }
 
 // To get the first entry pass key as `nil`
-func (m *BPFMap) GetFirstMapEntry(nextKey uintptr, mapFD uint32) error {
-	return m.GetNextMapEntry(uintptr(unsafe.Pointer(nil)), nextKey, mapFD)
+func (m *BPFMap) GetFirstMapEntry(nextKey uintptr) error {
+	return m.GetNextMapEntry(uintptr(unsafe.Pointer(nil)), nextKey)
 }
 
-func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr, mapFD uint32) error {
+func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 
 	var log = logger.Get()
 
 	attr := BpfMapAttr{
-		MapFD: mapFD,
+		MapFD: m.MapFD,
 		Key:   uint64(key),
 		Value: uint64(nextKey),
 	}
@@ -297,12 +296,12 @@ func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr, mapFD uint32) error {
 	return nil
 }
 
-func (m *BPFMap) GetMapEntry(key, value uintptr, mapFD uint32) error {
+func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 
 	var log = logger.Get()
 
 	attr := BpfMapAttr{
-		MapFD: mapFD,
+		MapFD: m.MapFD,
 		Key:   uint64(key),
 		Value: uint64(value),
 	}
@@ -321,56 +320,19 @@ func (m *BPFMap) GetMapEntry(key, value uintptr, mapFD uint32) error {
 	return nil
 }
 
-/*
-func (m *BpfMapApi) UpdateMapEntry(key uintptr, value uintptr, mapFD uint32) error {
-	var log = logger.Get()
-
-	attr := BpfMapAttr{
-		MapFD: mapFD,
-		Flags: uint64(BPF_NOEXIST),
-		Key: uint64(key),
-		Value: uint64(value),
-	}
-	ret, _, errno := unix.Syscall(
-		unix.SYS_BPF,
-		BPF_MAP_UPDATE_ELEM,
-		uintptr(unsafe.Pointer(&attr)),
-		unsafe.Sizeof(attr),
-	)
-	runtime.KeepAlive(key)
-	runtime.KeepAlive(value)
-
-	if errno !=0 {
-		log.Infof("Unable to update map entry and ret %d and err %s", int(ret), errno)
-		return fmt.Errorf("Unable to update map: %s", errno)
-	}
-
-	log.Infof("Update map entry done with fd : %d and err %s", int(ret), errno)
-	return nil
-
-}
-*/
-func (m *BPFMap) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr, mapFD uint32) error {
+func (m *BPFMap) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error {
 	var log = logger.Get()
 	for k, v := range keyvalue {
-		err := m.UpdateMapEntry(k, v, mapFD)
+		err := m.UpdateMapEntry(k, v)
 		if err != nil {
 			log.Infof("One of the element update failed hence returning from bulk update")
 			return err
 		}
 	}
-	log.Info("Bulk update is successful for mapFD: %d", int(mapFD))
+	log.Info("Bulk update is successful for mapFD: %d", int(m.MapFD))
 	return nil
 }
 
 func (m *BPFMap) GetMapFD() uint32 {
 	return m.MapFD
 }
-
-/*
-func (m *BpfMapApi) SetupPerfReader(perfMap BPFMap) error {
-	if perfMap.Def.Type != BPF_MAP_TYPE_PERF_EVENT_ARRAY {
-		retun fmt.Errorf("Not a supported map type")
-	}
-
-}*/

@@ -117,7 +117,7 @@ func (p *Perf) SetupPerfBuffer() (<-chan []byte, <-chan int, <-chan int, <-chan 
 		bpfMap := &ebpf_maps.BPFMap{
 			MapFD: p.MapFD,
 		}
-		err = bpfMap.UpdateMapEntry(uintptr(unsafe.Pointer(&cpu)), uintptr(unsafe.Pointer(&buffer.pmuFd)), p.MapFD)
+		err = bpfMap.UpdateMapEntry(uintptr(unsafe.Pointer(&cpu)), uintptr(unsafe.Pointer(&buffer.pmuFd)))
 		if err != nil {
 			p.CleanupBuffers()
 			return nil, nil, nil, nil, err
