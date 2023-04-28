@@ -204,7 +204,7 @@ func BpfGetMapInfoFromProgInfo(progFD int, numMaps uint32) (BpfProgInfo, []ebpf_
 	}
 
 	log.Infof("TYPE - %d", newBpfProgInfo.Type)
-	log.Infof("Prog Name - %s", string(newBpfProgInfo.Name[:]))
+	log.Infof("Prog Name - %s", unix.ByteSliceToString(newBpfProgInfo.Name[:]))
 	log.Infof("Maps linked - %d", newBpfProgInfo.NrMapIDs)
 	//Printing associated maps
 	loadedMaps := []ebpf_maps.BpfMapInfo{}

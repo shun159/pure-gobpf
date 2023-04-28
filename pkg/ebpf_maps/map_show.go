@@ -153,7 +153,7 @@ func GetBPFmapInfo(mapFD int) (BpfMapInfo, error) {
 	}
 
 	log.Infof("TYPE - ", bpfMapInfo.Type)
-	log.Infof("Prog Name - ", string(bpfMapInfo.Name[:]))
+	log.Infof("Prog Name - ", unix.ByteSliceToString(bpfMapInfo.Name[:]))
 	return bpfMapInfo, nil
 }
 
