@@ -106,6 +106,7 @@ type BpfMapAPIs interface {
 	GetFirstMapEntry(nextKey uintptr) error
 	GetNextMapEntry(key, nextKey uintptr) error
 	GetMapEntry(key, value uintptr) error
+	BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error
 	GetMapFD() uint32
 }
 
