@@ -21,7 +21,6 @@ const (
 	BPFTagSize       = 8
 )
 
-// Ref: https://github.com/libbpf/libbpf/blob/f8cd00f61302ca4d8645e007acf7f546dc323b33/include/uapi/linux/bpf.h
 type BpfMapInfo struct {
 	Type                  uint32
 	Id                    uint32

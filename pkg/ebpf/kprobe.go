@@ -108,7 +108,6 @@ MAXACTIVE      : Maximum number of instances of the specified function that
                  can be probed simultaneously, or 0 for the default value
                  as defined in Documentation/kprobes.txt section 1.3.1.
 
-REF: https://www.kernel.org/doc/html/v5.0/trace/kprobetrace.html
 */
 
 // if event is nil, we pick funcName

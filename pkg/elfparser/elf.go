@@ -37,8 +37,7 @@ var (
 	bpfMapDefSize = binary.Size(BPFMapDef{})
 	bpfFS         = "/sys/fs/bpf"
 	progbpfFS     = "/sys/fs/bpf/globals/aws/programs/"
-	//Ref - https://man7.org/linux/man-pages/man2/statfs.2.html
-	BPF_FS_MAGIC = 0xcafe4a11
+	BPF_FS_MAGIC  = 0xcafe4a11
 )
 
 type BPFMapDef struct {
@@ -51,12 +50,11 @@ type BPFMapDef struct {
 	inner_map_fd uint32
 }
 
-//Ref:https://github.com/torvalds/linux/blob/v5.10/samples/bpf/bpf_load.c
 type ELFContext struct {
 	// .elf will have multiple sections and maps
 	Section       map[string]ELFSection       // Indexed by section type
 	Maps          map[string]ebpf_maps.BPFMap // Index by map name
-	BPFloadedprog []BPFdata
+	BPFloadedprog map[string]BPFdata
 }
 
 type ELFSection struct {
@@ -66,11 +64,10 @@ type ELFSection struct {
 }
 
 type BPFdata struct {
-	Programs ebpf_progs.BPFProgram       // Return the program
-	Maps     map[string]ebpf_maps.BPFMap // List of associated maps
+	Program ebpf_progs.BPFProgram       // Return the program
+	Maps    map[string]ebpf_maps.BPFMap // List of associated maps
 }
 
-//https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h#L71
 type BPFInsn struct {
 	Code   uint8 // Opcode
 	DstReg uint8 // 4 bits: destination register, r0-r10
@@ -95,7 +92,7 @@ type relocationEntry struct {
 	symbol    elf.Symbol
 }
 
-func LoadBpfFile(path, customizedPinPath string) ([]BPFdata, error) {
+func LoadBpfFile(path, customizedPinPath string) (map[string]BPFdata, error) {
 	var log = logger.Get()
 	f, err := os.Open(path)
 	if err != nil {
@@ -289,7 +286,6 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 		//eBPF has one 16-byte instruction: BPF_LD | BPF_DW | BPF_IMM which consists
 		//of two consecutive 'struct bpf_insn' 8-byte blocks and interpreted as single
 		//instruction that loads 64-bit immediate value into a dst_reg.
-		//Ref: https://www.kernel.org/doc/Documentation/networking/filter.txt
 		ebpfInstruction := &BPFInsn{
 			Code:   data[relocationEntry.relOffset],
 			DstReg: data[relocationEntry.relOffset+1] & 0xf,
@@ -403,7 +399,7 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 						}
 					}
 
-					bpfData.Programs = ebpf_progs.BPFProgram{
+					bpfData.Program = ebpf_progs.BPFProgram{
 						ProgFD:      progFD,
 						PinPath:     pinPath,
 						ProgType:    progType,
@@ -447,7 +443,7 @@ func (c *ELFContext) doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfPr
 
 	c.Section = make(map[string]ELFSection)
 	c.Maps = make(map[string]ebpf_maps.BPFMap)
-	c.BPFloadedprog = []BPFdata{}
+	c.BPFloadedprog = make(map[string]BPFdata)
 	reloSectionMap := make(map[uint32]*elf.Section)
 
 	var dataMaps *elf.Section
@@ -523,7 +519,8 @@ func (c *ELFContext) doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfPr
 			log.Infof("Failed to load the prog")
 			return fmt.Errorf("Failed to load prog %q - %v", dataProg.Name, err)
 		}
-		c.BPFloadedprog = append(c.BPFloadedprog, bpfData)
+		c.BPFloadedprog[bpfData.Program.PinPath] = bpfData
+		//c.BPFloadedprog = append(c.BPFloadedprog, bpfData)
 	}
 
 	return nil
@@ -545,7 +542,7 @@ func InitPerfBuffer(mapFD uint32, WaitGrp sync.WaitGroup) (<-chan []byte, <-chan
 
 }
 
-func RecoverAllBpfProgramsAndMaps() ([]BPFdata, error) {
+func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	var log = logger.Get()
 	_, err := os.Stat(bpfFS)
 	if err != nil {
@@ -555,7 +552,7 @@ func RecoverAllBpfProgramsAndMaps() ([]BPFdata, error) {
 
 	var statfs syscall.Statfs_t
 	//Pass DS here
-	loadedPrograms := []BPFdata{}
+	loadedPrograms := make(map[string]BPFdata)
 	if err := syscall.Statfs(bpfFS, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
 		log.Infof("BPF FS is mounted")
 
@@ -569,7 +566,6 @@ func RecoverAllBpfProgramsAndMaps() ([]BPFdata, error) {
 					PinPath: pinPath,
 				}
 				//mapData := [string]ebpf_maps.BPFMap{}
-				//Ref : https://github.com/libbpf/bpftool/blob/259f40fd5bde67025beb1371d269c91bbe5d42ed/src/prog.c#L615
 				bpfProgInfo, progFD, err := ebpf_progs.BpfGetProgFromPinPath(pinPath)
 				if err != nil {
 					log.Infof("Failed to progInfo for pinPath %s", pinPath)
@@ -613,10 +609,11 @@ func RecoverAllBpfProgramsAndMaps() ([]BPFdata, error) {
 
 				}
 				recoveredBPFdata := BPFdata{
-					Programs: pgmData,
-					Maps:     recoveredMapData,
+					Program: pgmData,
+					Maps:    recoveredMapData,
 				}
-				loadedPrograms = append(loadedPrograms, recoveredBPFdata)
+				loadedPrograms[pinPath] = recoveredBPFdata
+				//loadedPrograms = append(loadedPrograms, recoveredBPFdata)
 			}
 			return nil
 		}); err != nil {

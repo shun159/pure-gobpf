@@ -19,8 +19,7 @@ const (
 	BPF_PROG_ATTACH = 8
 	BPF_PROG_DETACH = 9
 	bpfFS           = "/sys/fs/bpf"
-	//Ref - https://man7.org/linux/man-pages/man2/statfs.2.html
-	BPF_FS_MAGIC = 0xcafe4a11
+	BPF_FS_MAGIC    = 0xcafe4a11
 )
 
 type BpfProgAPIs interface {

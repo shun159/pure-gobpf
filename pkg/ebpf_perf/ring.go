@@ -51,7 +51,6 @@ func (b *ShmmapRingBuffer) GetRingBufferTail() int {
 	return b.tail
 }
 
-// Ref: https://github.com/iovisor/gobpf/blob/b5e5715ad84d6349cb29aea30990bf88f973376d/elf/perf.go#L59
 func (b *ShmmapRingBuffer) Read(size int) []byte {
 	ringBufferSize := b.getRingBufferSize()
 	ringBufferStart := b.getRingBufferStart()

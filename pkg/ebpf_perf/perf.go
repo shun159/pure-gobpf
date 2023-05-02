@@ -202,7 +202,6 @@ func (p *Perf) reconcileEventsDataChannel() {
 	}
 }
 
-//Ref: https://github.com/iovisor/gobpf/blob/b5e5715ad84d6349cb29aea30990bf88f973376d/elf/perf.go#L360
 func (p *Perf) readRingBuffer(ringBuffer *ShmmapRingBuffer) {
 	receivedEvents := 0
 	lostEvents := 0
