@@ -137,6 +137,14 @@ func (objattr *BpfObjGetInfo) BpfGetMapInfoForFD() error {
 	return nil
 }
 
+func GetIDFromFD(mapFD int) (int, error) {
+	mapInfo, err := GetBPFmapInfo(mapFD)
+	if err != nil {
+		return -1, err
+	}
+	return int(mapInfo.Id), nil
+}
+
 func GetBPFmapInfo(mapFD int) (BpfMapInfo, error) {
 	var log = logger.Get()
 	var bpfMapInfo BpfMapInfo

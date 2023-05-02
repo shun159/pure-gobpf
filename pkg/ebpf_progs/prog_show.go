@@ -183,6 +183,34 @@ func GetBPFprogInfo(progFD int) (BpfProgInfo, error) {
 	return bpfProgInfo, nil
 }
 
+func GetBPFProgAssociatedMapsIDs(progFD int) ([]uint32, error) {
+	var log = logger.Get()
+	bpfProgInfo, err := GetBPFprogInfo(progFD)
+
+	if bpfProgInfo.NrMapIDs <= 0 {
+		return nil, nil
+	}
+	numMaps := bpfProgInfo.NrMapIDs
+
+	associatedMaps := make([]uint32, numMaps)
+	newBpfProgInfo := BpfProgInfo{
+		NrMapIDs: numMaps,
+		MapIDs:   uint64(uintptr(unsafe.Pointer(&associatedMaps[0]))),
+	}
+	objInfo := BpfObjGetInfo{
+		bpf_fd:   uint32(progFD),
+		info_len: uint32(unsafe.Sizeof(newBpfProgInfo)),
+		info:     uintptr(unsafe.Pointer(&newBpfProgInfo)),
+	}
+
+	err = objInfo.BpfGetProgramInfoForFD()
+	if err != nil {
+		log.Infof("Failed to get program Info for FD - ", progFD)
+		return nil, err
+	}
+	return associatedMaps, nil
+}
+
 func BpfGetMapInfoFromProgInfo(progFD int, numMaps uint32) (BpfProgInfo, []ebpf_maps.BpfMapInfo, []int, error) {
 	var log = logger.Get()
 	associatedMaps := make([]uint32, numMaps)
