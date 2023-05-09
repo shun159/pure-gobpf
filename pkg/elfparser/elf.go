@@ -268,8 +268,6 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 		return BPFdata{}, fmt.Errorf("get symbols: %w", err)
 	}
 
-	//TODO : kprobe check is temp until we fix realloc null issue
-	//if progType != "kprobe" {
 	relocationEntries, err := parseRelocationSection(reloSection, elfFile)
 	if err != nil || len(relocationEntries) == 0 {
 		return BPFdata{}, fmt.Errorf("Unable to parse relocation entries....")
@@ -308,28 +306,40 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 		// BPF_MEM | <size> | BPF_ST:   *(size *) (dst_reg + off) = imm32
 		mapName := relocationEntry.symbol.Name
 		log.Infof("Map to be relocated; Name: %s", mapName)
+		var mapFD int
 		if progMap, ok := c.Maps[mapName]; ok {
-			mapFD := progMap.GetMapFD()
-			log.Infof("Map found. Replace the offset with corresponding Map FD: %v", mapFD)
-			ebpfInstruction.SrcReg = 1 //dummy value for now
-			ebpfInstruction.Imm = int32(mapFD)
-			copy(data[relocationEntry.relOffset:relocationEntry.relOffset+8], ebpfInstruction.convertBPFInstructionToByteStream())
-			log.Infof("From data: BPF Instruction code: %d; offset: %d; imm: %d",
-				uint8(data[relocationEntry.relOffset]),
-				uint16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:relocationEntry.relOffset+4])),
-				uint32(binary.LittleEndian.Uint32(data[relocationEntry.relOffset+4:relocationEntry.relOffset+8])))
-
-			map_id, err := ebpf_maps.GetIDFromFD(int(mapFD))
+			mapFD = int(progMap.GetMapFD())
+			map_id, err := ebpf_maps.GetIDFromFD(mapFD)
 			if err != nil {
 				return BPFdata{}, fmt.Errorf("Failed to get ID for mapFD %d - %v", mapFD, err)
 			}
 			mapIDToFD[map_id] = mapName
 
 		} else {
-			return BPFdata{}, fmt.Errorf("map '%s' doesn't exist", mapName)
+			//This might be a shared map so get from pinpath
+			pinLocation := "conntrack_" + mapName
+			globalPinPath := "/sys/fs/bpf/globals/aws/maps/" + pinLocation
+			mapInfo, err := ebpf_maps.BpfGetMapFromPinPath(globalPinPath)
+			if err != nil {
+				return BPFdata{}, fmt.Errorf("map '%s' doesn't exist", mapName)
+			}
+			map_id := int(mapInfo.Id)
+			mapIDToFD[map_id] = mapName
+			mapFD, err = ebpf_maps.GetFDFromID(map_id)
+			if err != nil {
+				return BPFdata{}, fmt.Errorf("Failed to get map FD '%s' doesn't exist", mapName)
+			}
 		}
+
+		log.Infof("Map found. Replace the offset with corresponding Map FD: %v", mapFD)
+		ebpfInstruction.SrcReg = 1 //dummy value for now
+		ebpfInstruction.Imm = int32(mapFD)
+		copy(data[relocationEntry.relOffset:relocationEntry.relOffset+8], ebpfInstruction.convertBPFInstructionToByteStream())
+		log.Infof("From data: BPF Instruction code: %d; offset: %d; imm: %d",
+			uint8(data[relocationEntry.relOffset]),
+			uint16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:relocationEntry.relOffset+4])),
+			uint32(binary.LittleEndian.Uint32(data[relocationEntry.relOffset+4:relocationEntry.relOffset+8])))
 	}
-	//}
 
 	var pgmList = make(map[string]ebpf_progs.BPFProgram)
 	bpfData := BPFdata{}

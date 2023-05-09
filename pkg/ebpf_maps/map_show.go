@@ -144,6 +144,20 @@ func GetIDFromFD(mapFD int) (int, error) {
 	return int(mapInfo.Id), nil
 }
 
+func GetFDFromID(mapID int) (int, error) {
+	var log = logger.Get()
+	fileAttr := BpfMapShowAttr{
+		Map_id: uint32(mapID),
+	}
+	mapfd, err := fileAttr.BpfMapGetFDbyID()
+	if err != nil {
+		log.Infof("Failed to get map Info")
+		return -1, err
+	}
+	log.Infof("Found map FD - %d", mapfd)
+	return mapfd, nil
+}
+
 func GetBPFmapInfo(mapFD int) (BpfMapInfo, error) {
 	var log = logger.Get()
 	var bpfMapInfo BpfMapInfo
