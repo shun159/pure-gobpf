@@ -37,6 +37,7 @@ var (
 	bpfMapDefSize = binary.Size(BPFMapDef{})
 	bpfFS         = "/sys/fs/bpf"
 	progbpfFS     = "/sys/fs/bpf/globals/aws/programs/"
+	mapbpfFS      = "/sys/fs/bpf/globals/aws/maps/"
 	BPF_FS_MAGIC  = 0xcafe4a11
 )
 
@@ -182,7 +183,7 @@ func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, el
 			mapNameStr = customizedPinPath + "_" + mapNameStr
 		}
 
-		pinPath := "/sys/fs/bpf/globals/aws/maps/" + mapNameStr
+		pinPath := mapbpfFS + mapNameStr
 		bpfMap.PinMap(pinPath)
 
 		c.Maps[loadedMaps.Name] = bpfMap
@@ -255,11 +256,8 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 		return BPFdata{}, err
 	}
 
-	//TODO : kprobe check is temp until we fix realloc null issue
-	//if progType != "kprobe" {
 	log.Infof("Loading Program with relocation section; Info:%v; Name: %s, Type: %s; Size: %v", reloSection.Info,
 		reloSection.Name, reloSection.Type, reloSection.Size)
-	//}
 
 	//Single section might have multiple programs. So we retrieve one prog at a time and load.
 	symbolTable, err := elfFile.Symbols()
@@ -316,9 +314,9 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 			mapIDToFD[map_id] = mapName
 
 		} else {
-			//This might be a shared map so get from pinpath
-			pinLocation := "conntrack_" + mapName
-			globalPinPath := "/sys/fs/bpf/globals/aws/maps/" + pinLocation
+			//This might be a shared global map so get from pinpath
+			pinLocation := "global_" + mapName
+			globalPinPath := mapbpfFS + pinLocation
 			mapInfo, err := ebpf_maps.BpfGetMapFromPinPath(globalPinPath)
 			if err != nil {
 				return BPFdata{}, fmt.Errorf("map '%s' doesn't exist", mapName)
@@ -377,7 +375,7 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 					if len(customizedPinPath) != 0 {
 						pinLocation = customizedPinPath + "_" + ProgName
 					}
-					pinPath := "/sys/fs/bpf/globals/aws/programs/" + pinLocation
+					pinPath := progbpfFS + pinLocation
 					progFD, _ := bpfProgApi.LoadProg(progType, programData, license, pinPath, bpfInsDefSize)
 					if progFD == -1 {
 						log.Infof("Failed to load prog")
@@ -530,7 +528,6 @@ func (c *ELFContext) doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfPr
 			return fmt.Errorf("Failed to load prog %q - %v", dataProg.Name, err)
 		}
 		c.BPFloadedprog[bpfData.Program.PinPath] = bpfData
-		//c.BPFloadedprog = append(c.BPFloadedprog, bpfData)
 	}
 
 	return nil
@@ -613,7 +610,6 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 							},
 						}
 						recoveredBpfMap.MapMetaData = recoveredBpfMapMetaData
-						//mapData = append(mapData, recoveredBpfMap)
 						recoveredMapData[mapName] = recoveredBpfMap
 					}
 
