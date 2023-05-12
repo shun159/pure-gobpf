@@ -41,17 +41,17 @@ type RingBuffer struct {
 	receivedEvents       chan int
 }
 
-func InitRingBuffer(mapFD int) (*RingBuffer, error) {
+func InitRingBuffer(mapFD int) (<-chan []byte, <-chan int, error) {
 	if mapFD == -1 {
-		return nil, fmt.Errorf("Invalid map FD")
+		return nil, nil, fmt.Errorf("Invalid map FD")
 	}
 	mapInfo, err := ebpf_maps.GetBPFmapInfo(mapFD)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to map info")
+		return nil, nil, fmt.Errorf("Failed to map info")
 	}
 
 	if mapInfo.Type != BPF_MAP_TYPE_RINGBUF {
-		return nil, fmt.Errorf("Unsupported map type, should be - BPF_MAP_TYPE_RINGBUF")
+		return nil, nil, fmt.Errorf("Unsupported map type, should be - BPF_MAP_TYPE_RINGBUF")
 	}
 
 	rb := &RingBuffer{
@@ -62,19 +62,20 @@ func InitRingBuffer(mapFD int) (*RingBuffer, error) {
 
 	rb.EpollFD, err = unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create epoll instance: %s", err)
+		return nil, nil, fmt.Errorf("Failed to create epoll instance: %s", err)
 	}
 
-	err = rb.SetupRingBuffer(mapFD, mapInfo.MaxEntries)
+	eventsChan, eventsCnt, err := rb.SetupRingBuffer(mapFD, mapInfo.MaxEntries)
 	if err != nil {
 		rb.CleanupRingBuffer()
-		return nil, fmt.Errorf("Failed to add ring buffer: %s", err)
+		return nil, nil, fmt.Errorf("Failed to add ring buffer: %s", err)
 	}
 
-	return rb, nil
+	return eventsChan, eventsCnt, nil
+	//return rb, nil
 }
 
-func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) error {
+func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) (<-chan []byte, <-chan int, error) {
 	ring := &Ring{
 		RingBufferMapFD: mapFD,
 		Mask:            uint64(maxEntries - 1),
@@ -82,7 +83,7 @@ func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) error {
 
 	tmp, err := unix.Mmap(mapFD, 0, rb.PageSize, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
-		return fmt.Errorf("Failed to create Mmap for consumer -> %d: %s", mapFD, err)
+		return nil, nil, fmt.Errorf("Failed to create Mmap for consumer -> %d: %s", mapFD, err)
 	}
 
 	ring.Consumer_pos = unsafe.Pointer(&tmp[0])
@@ -93,7 +94,7 @@ func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) error {
 	tmp, err = unix.Mmap(mapFD, int64(rb.PageSize), int(mmap_sz), unix.PROT_READ, unix.MAP_SHARED)
 	if err != nil {
 		unix.Munmap(tmp)
-		return fmt.Errorf("Failed to create Mmap for producer -> %d: %s", mapFD, err)
+		return nil, nil, fmt.Errorf("Failed to create Mmap for producer -> %d: %s", mapFD, err)
 	}
 
 	ring.Producer_pos = unsafe.Pointer(&tmp[0])
@@ -108,7 +109,7 @@ func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) error {
 	err = unix.EpollCtl(rb.EpollFD, unix.EPOLL_CTL_ADD, mapFD, &epollEvent)
 	if err != nil {
 		unix.Munmap(tmp)
-		return fmt.Errorf("Failed to Epoll event: %s", err)
+		return nil, nil, fmt.Errorf("Failed to Epoll event: %s", err)
 	}
 
 	rb.Rings = append(rb.Rings, ring)
@@ -121,7 +122,8 @@ func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) error {
 	rb.receivedEvents = make(chan int)
 
 	rb.wg.Add(1)
-	return nil
+	go rb.reconcileEventsDataChannel()
+	return rb.eventsDataChannel, rb.receivedEvents, nil
 }
 
 func (rb *RingBuffer) CleanupRingBuffer() {
