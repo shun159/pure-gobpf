@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
+	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 	"golang.org/x/sys/unix"
 )
 
@@ -42,6 +43,7 @@ type RingBuffer struct {
 }
 
 func InitRingBuffer(mapFD int) (<-chan []byte, <-chan int, error) {
+	var log = logger.Get()
 	if mapFD == -1 {
 		return nil, nil, fmt.Errorf("Invalid map FD")
 	}
@@ -70,17 +72,19 @@ func InitRingBuffer(mapFD int) (<-chan []byte, <-chan int, error) {
 		rb.CleanupRingBuffer()
 		return nil, nil, fmt.Errorf("Failed to add ring buffer: %s", err)
 	}
-
+	log.Infof("Ringbuffer setup done")
 	return eventsChan, eventsCnt, nil
 	//return rb, nil
 }
 
 func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) (<-chan []byte, <-chan int, error) {
+	var log = logger.Get()
 	ring := &Ring{
 		RingBufferMapFD: mapFD,
 		Mask:            uint64(maxEntries - 1),
 	}
 
+	log.Infof("Create Consumer")
 	tmp, err := unix.Mmap(mapFD, 0, rb.PageSize, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to create Mmap for consumer -> %d: %s", mapFD, err)
@@ -90,7 +94,7 @@ func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) (<-chan []by
 	ring.Consumer = tmp
 
 	mmap_sz := uint32(rb.PageSize) + 2*maxEntries
-
+	log.Infof("Create producer")
 	tmp, err = unix.Mmap(mapFD, int64(rb.PageSize), int(mmap_sz), unix.PROT_READ, unix.MAP_SHARED)
 	if err != nil {
 		unix.Munmap(tmp)
@@ -106,6 +110,7 @@ func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) (<-chan []by
 		Fd:     int32(rb.RingCnt),
 	}
 
+	log.Infof("Setup Poller")
 	err = unix.EpollCtl(rb.EpollFD, unix.EPOLL_CTL_ADD, mapFD, &epollEvent)
 	if err != nil {
 		unix.Munmap(tmp)
@@ -122,6 +127,7 @@ func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) (<-chan []by
 	rb.receivedEvents = make(chan int)
 
 	rb.wg.Add(1)
+	log.Infof("Setup done, starting reconciler for events")
 	go rb.reconcileEventsDataChannel()
 	return rb.eventsDataChannel, rb.receivedEvents, nil
 }
@@ -166,6 +172,7 @@ func (rb *RingBuffer) reconcileEventsDataChannel() {
 }
 
 func (rb *RingBuffer) EpollStart() <-chan *Ring {
+	var log = logger.Get()
 
 	rb.stopRingBufferChan = make(chan struct{})
 	rb.updateRingBufferChan = make(chan *Ring)
@@ -182,7 +189,9 @@ func (rb *RingBuffer) EpollStart() <-chan *Ring {
 				break
 			}
 			numEvents := rb.poll(rb.EpollEvent[:rb.RingCnt])
+			log.Infof("Got events : ", numEvents)
 			for _, event := range rb.EpollEvent[:numEvents] {
+				log.Infof("Got for FD ", int(event.Fd))
 				select {
 				case rb.updateRingBufferChan <- rb.Rings[int(event.Fd)]:
 
@@ -243,38 +252,43 @@ func memcpy(dst, src unsafe.Pointer, count uintptr) {
 
 //Ref: libbpf ring buffer implementation
 func (rb *RingBuffer) readRingBuffer(eventRing *Ring) {
+	var log = logger.Get()
 	receivedEvents := 0
 	var gotNewData bool
+	log.Infof("In readRingBuffer")
 	cons_pos := eventRing.loadConsumer()
 	for {
 		gotNewData = false
 		prod_pos := eventRing.loadProducer()
 		for cons_pos < prod_pos {
+			log.Infof("Consumer<producer")
 			//Get the header
 			lenPtr := (*int32)(unsafe.Pointer(uintptr(eventRing.Data) + (uintptr(cons_pos) & uintptr(eventRing.Mask))))
 			//Length of the data in header
 			len := atomic.LoadInt32(lenPtr)
-
+			log.Infof("Got header")
 			//Check if busy then skip
 			if uint32(len)&unix.BPF_RINGBUF_BUSY_BIT != 0 {
+				log.Infof("Busy bit set")
 				rb.receivedEvents <- receivedEvents
 				return
 			}
 
 			gotNewData = true
-
+			log.Infof("Got data...")
 			//Update consumer position
 			cons_pos += uint64(roundup_len(uint32(len)))
 
 			//if not discard
 			if uint32(len)&unix.BPF_RINGBUF_DISCARD_BIT == 0 {
-
+				log.Infof("Got sample...")
 				//Got sample
 				sample := unsafe.Pointer(uintptr(unsafe.Pointer(lenPtr)) + uintptr(ringbufHeaderSize))
 
 				//Read sample of len bytes from producer
 				dataBuf := make([]byte, int(len))
 				memcpy(unsafe.Pointer(&dataBuf[0]), sample, uintptr(len))
+				log.Infof("Sample is ", sample)
 				/*
 					err = r.sample_cb(r.ctx, sample, int(len))
 					if err < 0 {
@@ -285,13 +299,15 @@ func (rb *RingBuffer) readRingBuffer(eventRing *Ring) {
 				rb.eventsDataChannel <- dataBuf
 				receivedEvents++
 			}
-
+			log.Infof("Reset consumer...")
 			atomic.StoreUint64((*uint64)(eventRing.Consumer_pos), cons_pos)
 		}
 		if !gotNewData {
+			log.Infof("Done new data...so break")
 			break
 		}
 	}
+	log.Infof("Total events : ", receivedEvents)
 	rb.receivedEvents <- receivedEvents
 	return
 }
