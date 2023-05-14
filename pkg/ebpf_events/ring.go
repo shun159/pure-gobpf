@@ -51,7 +51,7 @@ func InitRingBuffer(mapFD int) (<-chan []byte, <-chan int, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to map info")
 	}
-
+	log.Infof("Got map FD %d", mapFD)
 	if mapInfo.Type != BPF_MAP_TYPE_RINGBUF {
 		return nil, nil, fmt.Errorf("Unsupported map type, should be - BPF_MAP_TYPE_RINGBUF")
 	}
