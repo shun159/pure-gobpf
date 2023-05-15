@@ -161,18 +161,20 @@ func (rb *RingBuffer) reconcileEventsDataChannel() {
 
 	for {
 		select {
-		case buffer, ok:= <-pollerCh:
+		case _, ok:= <-pollerCh:
 			
 			if !ok {
-				//return
-				log.Infof("Why not ok??")
+				return
+				//log.Infof("Why not ok??")
 			}
-			rb.readRingBuffer(buffer)
+			//rb.readRingBuffer(buffer)
 
 		case <-rb.eventsStopChannel:
+			log.Infof("Got stop channel")
 			return
 		}
 	}
+	log.Infof("Out of reconcile events data channel")
 }
 
 func (rb *RingBuffer) EpollStart() <-chan *Ring {
