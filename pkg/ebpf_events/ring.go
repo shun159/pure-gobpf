@@ -161,13 +161,13 @@ func (rb *RingBuffer) reconcileEventsDataChannel() {
 
 	for {
 		select {
-		case _, ok:= <-pollerCh:
+		case buffer, ok:= <-pollerCh:
 			
 			if !ok {
 				return
 				//log.Infof("Why not ok??")
 			}
-			//rb.readRingBuffer(buffer)
+			rb.readRingBuffer(buffer)
 
 		case <-rb.eventsStopChannel:
 			log.Infof("Got stop channel")
