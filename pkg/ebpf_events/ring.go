@@ -153,6 +153,7 @@ func (rb *RingBuffer) CleanupRingBuffer() {
 
 func (rb *RingBuffer) reconcileEventsDataChannel() {
 
+	var log = logger.Get()
 	pollerCh := rb.EpollStart()
 	defer func() {
 		rb.wg.Done()
@@ -160,9 +161,11 @@ func (rb *RingBuffer) reconcileEventsDataChannel() {
 
 	for {
 		select {
-		case buffer, ok := <-pollerCh:
+		case buffer, ok:= <-pollerCh:
+			
 			if !ok {
-				return
+				//return
+				log.Infof("Why not ok??")
 			}
 			rb.readRingBuffer(buffer)
 
