@@ -105,6 +105,7 @@ func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) (<-chan []by
 	ring.Producer = tmp
 	ring.Data = unsafe.Pointer(uintptr(unsafe.Pointer(&tmp[0])) + uintptr(rb.PageSize))
 	//ring.Data = tmp[os.Getpagesize():]
+	log.Infof("Ring cnt %d", int(rb.RingCnt))
 	epollEvent := unix.EpollEvent{
 		Events: unix.EPOLLIN,
 		Fd:     int32(rb.RingCnt),
@@ -209,10 +210,14 @@ func (rb *RingBuffer) EpollStart() <-chan *Ring {
 func (rb *RingBuffer) poll(events []unix.EpollEvent) int {
 
 	timeoutMs := 150
+	var log = logger.Get()
+	log.Infof("epoll FD ", rb.EpollFD)
 	n, err := unix.EpollWait(rb.EpollFD, events, timeoutMs)
 	if err != nil {
+		log.Infof("Got epollwait %v", err)
 		return 0
 	}
+	log.Infof("Poll event %d", n)
 	return n
 }
 
