@@ -325,7 +325,7 @@ func (rb *RingBuffer) readRingBuffer(eventRing *Ring) {
 				//Read sample of len bytes from producer
 				dataBuf := make([]byte, int(len))
 				memcpy(unsafe.Pointer(&dataBuf[0]), sample, uintptr(len))
-				log.Infof("Sample is ", sample)
+				log.Infof("Sample is ", string(dataBuf[:]))
 				/*
 					err = r.sample_cb(r.ctx, sample, int(len))
 					if err < 0 {
