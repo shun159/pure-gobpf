@@ -296,9 +296,10 @@ func memcpy(dst, src unsafe.Pointer, count uintptr) {
 func (rb *RingBuffer) readRingBuffer(eventRing *Ring) {
 	var log = logger.Get()
 	receivedEvents := 0
-	var gotNewData bool
+	//var gotNewData bool
 	log.Infof("In readRingBuffer")
-	cons_pos := eventRing.loadConsumer()
+	//cons_pos := eventRing.loadConsumer()
+	/*
 	for {
 		gotNewData = false
 		prod_pos := eventRing.loadProducer()
@@ -331,13 +332,6 @@ func (rb *RingBuffer) readRingBuffer(eventRing *Ring) {
 				dataBuf := make([]byte, int(len))
 				memcpy(unsafe.Pointer(&dataBuf[0]), sample, uintptr(len))
 				log.Infof("Sample is ", string(dataBuf[:]))
-				/*
-					err = r.sample_cb(r.ctx, sample, int(len))
-					if err < 0 {
-						// Update consumer pos and bail out
-						atomic.StoreUint64((*uint64)(r.consumer_pos), consPos)
-						return 0, fmt.Errorf("Failed to process sample: %d", err)
-					}*/
 				rb.eventsDataChannel <- dataBuf
 				receivedEvents++
 			}
@@ -349,6 +343,7 @@ func (rb *RingBuffer) readRingBuffer(eventRing *Ring) {
 			break
 		}
 	}
+	*/
 	log.Infof("Total events : ", receivedEvents)
 	rb.receivedEvents <- receivedEvents
 	return
