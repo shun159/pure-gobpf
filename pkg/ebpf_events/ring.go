@@ -38,6 +38,7 @@ type RingBuffer struct {
 	updateRingBufferChan chan *Ring
 	eventsStopChannel    chan struct{}
 	wg                   sync.WaitGroup
+	epoll_wg             sync.WaitGroup
 	eventsDataChannel    chan []byte
 	receivedEvents       chan int
 }
@@ -159,7 +160,10 @@ func (rb *RingBuffer) reconcileEventsDataChannel() {
 
 	for {
 		select {
-		case buffer := <-pollerCh:
+		case buffer, ok := <-pollerCh:
+			if !ok {
+				return
+			}
 			rb.readRingBuffer(buffer)
 
 		case <-rb.eventsStopChannel:
@@ -173,34 +177,66 @@ func (rb *RingBuffer) EpollStart() <-chan *Ring {
 
 	rb.stopRingBufferChan = make(chan struct{})
 	rb.updateRingBufferChan = make(chan *Ring)
+	rb.epoll_wg.Add(1)
+	log.Info("Start epollstart")
+	go rb.eventsPoller()
 
-	done := make(chan bool)
-	go func() {
-		defer func() { done <- true }()
+	return rb.updateRingBufferChan
+	/*
+		done := make(chan bool)
 
-		for {
-			select {
-			case <-rb.stopRingBufferChan:
-				return
-			default:
-				break
-			}
-			numEvents := rb.poll(rb.EpollEvent[:rb.RingCnt])
-			log.Infof("Got events : ", numEvents)
-			for _, event := range rb.EpollEvent[:numEvents] {
-				log.Infof("Got for FD ", int(event.Fd))
+		go func() {
+			defer func() { done <- true }()
+
+			for {
 				select {
-				case rb.updateRingBufferChan <- rb.Rings[int(event.Fd)]:
-
 				case <-rb.stopRingBufferChan:
 					return
+				default:
+					break
+				}
+				numEvents := rb.poll(rb.EpollEvent[:rb.RingCnt])
+				log.Infof("Got events : ", numEvents)
+				for _, event := range rb.EpollEvent[:numEvents] {
+					log.Infof("Got for FD ", int(event.Fd))
+					select {
+					case rb.updateRingBufferChan <- rb.Rings[int(event.Fd)]:
+
+					case <-rb.stopRingBufferChan:
+						return
+					}
 				}
 			}
-		}
-	}()
+		}()
 
-	<-done
-	return rb.updateRingBufferChan
+		<-done
+		return rb.updateRingBufferChan
+	*/
+
+}
+
+func (rb *RingBuffer) eventsPoller() {
+	defer rb.epoll_wg.Done()
+	var log = logger.Get()
+	for {
+		select {
+		case <-rb.stopRingBufferChan:
+			return
+		default:
+			break
+		}
+		numEvents := rb.poll(rb.EpollEvent[:rb.RingCnt])
+		log.Infof("Got events : ", numEvents)
+		for _, event := range rb.EpollEvent[:numEvents] {
+			log.Infof("Got for FD ", int(event.Fd))
+			select {
+			case rb.updateRingBufferChan <- rb.Rings[int(event.Fd)]:
+
+			case <-rb.stopRingBufferChan:
+				return
+			}
+		}
+	}
 }
 
 func (rb *RingBuffer) poll(events []unix.EpollEvent) int {
