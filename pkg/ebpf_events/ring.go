@@ -344,7 +344,7 @@ func (rb *RingBuffer) readRingBuffer(eventRing *Ring) {
 		}
 	}
 	*/
-	log.Infof("Total events : ", receivedEvents)
-	rb.receivedEvents <- receivedEvents
-	return
+	log.Infof("JAY Total events : ", receivedEvents)
+	//rb.receivedEvents <- receivedEvents
+	//return
 }
