@@ -296,10 +296,9 @@ func memcpy(dst, src unsafe.Pointer, count uintptr) {
 func (rb *RingBuffer) readRingBuffer(eventRing *Ring) {
 	var log = logger.Get()
 	receivedEvents := 0
-	//var gotNewData bool
+	var gotNewData bool
 	log.Infof("In readRingBuffer")
-	//cons_pos := eventRing.loadConsumer()
-	/*
+	cons_pos := eventRing.loadConsumer()
 	for {
 		gotNewData = false
 		prod_pos := eventRing.loadProducer()
@@ -313,8 +312,9 @@ func (rb *RingBuffer) readRingBuffer(eventRing *Ring) {
 			//Check if busy then skip
 			if uint32(len)&unix.BPF_RINGBUF_BUSY_BIT != 0 {
 				log.Infof("Busy bit set")
-				rb.receivedEvents <- receivedEvents
-				return
+				//rb.receivedEvents <- receivedEvents
+				gotNewData = false
+				break
 			}
 
 			gotNewData = true
@@ -343,7 +343,6 @@ func (rb *RingBuffer) readRingBuffer(eventRing *Ring) {
 			break
 		}
 	}
-	*/
 	log.Infof("JAY Total events : ", receivedEvents)
 	//rb.receivedEvents <- receivedEvents
 	//return
