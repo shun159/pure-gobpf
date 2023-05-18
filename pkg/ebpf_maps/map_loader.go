@@ -383,7 +383,7 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 	var log = logger.Get()
 
 	// 1. Construct i/p to bulkMap
-	var keyvaluePtr map[uintptr]uintptr
+	keyvaluePtr := make(map[uintptr]uintptr)
 
 	for k, v := range newMapContents {
 		keyByte := []byte(k)
