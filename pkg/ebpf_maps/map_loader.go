@@ -387,6 +387,7 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 
 	for k, v := range newMapContents {
 		keyByte := []byte(k)
+		log.Info("Converted string to bytearray %v", keyByte)
 		keyPtr := uintptr(unsafe.Pointer(&keyByte[0]))
 		keyvaluePtr[keyPtr] = v
 	}
