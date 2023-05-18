@@ -10,13 +10,11 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 
 	"golang.org/x/sys/unix"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
-	perf "github.com/jayanthvn/pure-gobpf/pkg/ebpf_perf"
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_progs"
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 )
@@ -531,22 +529,6 @@ func (c *ELFContext) doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfPr
 	}
 
 	return nil
-}
-
-func InitPerfBuffer(mapFD uint32, WaitGrp sync.WaitGroup) (<-chan []byte, <-chan int, <-chan int, <-chan int, error) {
-	var err error
-	perfEvents := &perf.Perf{
-		MapFD: mapFD,
-	}
-
-	eventsReader, eventsReceived, eventsLost, eventsUnknown, err := perfEvents.SetupPerfBuffer()
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("Failed to init perf buffer %v", err)
-	}
-
-	WaitGrp = sync.WaitGroup{}
-	return eventsReader, eventsReceived, eventsLost, eventsUnknown, nil
-
 }
 
 func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {

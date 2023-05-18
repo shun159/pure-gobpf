@@ -107,7 +107,9 @@ type BpfMapAPIs interface {
 	GetNextMapEntry(key, nextKey uintptr) error
 	GetMapEntry(key, value uintptr) error
 	BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error
+	BulkDeleteMapEntry(keyvalue map[uintptr]uintptr) error
 	GetMapFD() uint32
+	BulkRefreshMapEntries(newMapContents map[string]uintptr) error
 }
 
 func (m *BPFMap) CreateMap(MapMetaData BpfMapData) (BPFMap, error) {
@@ -297,6 +299,32 @@ func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 	return nil
 }
 
+func (m *BPFMap) GetAllMapKeys() ([]string, error) {
+	var log = logger.Get()
+	var keyList []string
+	mapSize := m.MapMetaData.Def.KeySize
+
+	curKey := make([]byte, mapSize)
+	nextKey := make([]byte, mapSize)
+
+	err := m.GetFirstMapEntry(uintptr(unsafe.Pointer(&curKey)))
+	if err != nil {
+		log.Infof("Unable to get first key %s", err)
+		return nil, fmt.Errorf("Unable to get next map entry: %s", err)
+	} else {
+		for {
+			err = m.GetNextMapEntry(uintptr(unsafe.Pointer(&curKey)), uintptr(unsafe.Pointer(&nextKey)))
+			if err != nil {
+				break
+			}
+			keyList = append(keyList, string(curKey))
+			curKey = nextKey
+		}
+	}
+
+	return keyList, nil
+}
+
 func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 
 	var log = logger.Get()
@@ -321,6 +349,19 @@ func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 	return nil
 }
 
+func (m *BPFMap) BulkDeleteMapEntry(keyvalue map[uintptr]uintptr) error {
+	var log = logger.Get()
+	for k, _ := range keyvalue {
+		err := m.DeleteMapEntry(k)
+		if err != nil {
+			log.Infof("One of the element delete failed hence returning from bulk update")
+			return err
+		}
+	}
+	log.Info("Bulk delete is successful for mapFD: %d", int(m.MapFD))
+	return nil
+}
+
 func (m *BPFMap) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error {
 	var log = logger.Get()
 	for k, v := range keyvalue {
@@ -336,4 +377,42 @@ func (m *BPFMap) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error {
 
 func (m *BPFMap) GetMapFD() uint32 {
 	return m.MapFD
+}
+
+func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error {
+	var log = logger.Get()
+
+	// 1. Construct i/p to bulkMap
+	var keyvaluePtr map[uintptr]uintptr
+
+	for k, v := range newMapContents {
+		keyByte := []byte(k)
+		keyPtr := uintptr(unsafe.Pointer(&keyByte[0]))
+		keyvaluePtr[keyPtr] = v
+	}
+
+	// 2. Update all map entries
+	err := m.BulkUpdateMapEntry(keyvaluePtr)
+	if err != nil {
+		log.Info("Refresh map failed: during update")
+		return err
+	}
+
+	// 3. Read all map entries
+	retrievedMapKeyList, err := m.GetAllMapKeys()
+
+	// 4. Delete stale Keys
+	for _, key := range retrievedMapKeyList {
+		_, ok := newMapContents[key]
+		if !ok {
+			//This can be deleted since missing in new map data
+			deletableKeyByte := []byte(key)
+			deletableKeyBytePtr := uintptr(unsafe.Pointer(&deletableKeyByte[0]))
+			err = m.DeleteMapEntry(deletableKeyBytePtr)
+			if err != nil {
+				log.Info("Unable to delete entry %s but will continue", key)
+			}
+		}
+	}
+	return nil
 }
