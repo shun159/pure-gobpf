@@ -402,6 +402,10 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 
 	// 3. Read all map entries
 	retrievedMapKeyList, err := m.GetAllMapKeys()
+	if err != nil {
+		log.Infof("Get all map keys failed: during Refresh %v", err)
+		return err	
+	}
 
 	// 4. Delete stale Keys
 	for _, key := range retrievedMapKeyList {
