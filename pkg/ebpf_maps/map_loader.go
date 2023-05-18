@@ -307,22 +307,23 @@ func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 	curKey := make([]byte, mapSize)
 	nextKey := make([]byte, mapSize)
 
-	err := m.GetFirstMapEntry(uintptr(unsafe.Pointer(&curKey)))
+	err := m.GetFirstMapEntry(uintptr(unsafe.Pointer(&curKey[0])))
 	if err != nil {
 		log.Infof("Unable to get first key %s", err)
-		return nil, fmt.Errorf("Unable to get next map entry: %s", err)
+		return nil, fmt.Errorf("Unable to get first key entry: %s", err)
 	} else {
 		for {
-			err = m.GetNextMapEntry(uintptr(unsafe.Pointer(&curKey)), uintptr(unsafe.Pointer(&nextKey)))
+			err = m.GetNextMapEntry(uintptr(unsafe.Pointer(&curKey[0])), uintptr(unsafe.Pointer(&nextKey[0])))
 			if err != nil {
+				log.Infof("Unable to get next key %s", err)
 				break
 			}
 			keyList = append(keyList, string(curKey))
 			curKey = nextKey
 		}
 	}
-
-	return keyList, nil
+	log.Infof("Got all keys")
+	return keyList, err
 }
 
 func (m *BPFMap) GetMapEntry(key, value uintptr) error {
@@ -358,7 +359,7 @@ func (m *BPFMap) BulkDeleteMapEntry(keyvalue map[uintptr]uintptr) error {
 			return err
 		}
 	}
-	log.Info("Bulk delete is successful for mapFD: %d", int(m.MapFD))
+	log.Infof("Bulk delete is successful for mapFD: %d", int(m.MapFD))
 	return nil
 }
 
@@ -371,7 +372,7 @@ func (m *BPFMap) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error {
 			return err
 		}
 	}
-	log.Info("Bulk update is successful for mapFD: %d", int(m.MapFD))
+	log.Infof("Bulk update is successful for mapFD: %d", int(m.MapFD))
 	return nil
 }
 
@@ -395,7 +396,7 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 	// 2. Update all map entries
 	err := m.BulkUpdateMapEntry(keyvaluePtr)
 	if err != nil {
-		log.Info("Refresh map failed: during update")
+		log.Infof("Refresh map failed: during update %v", err)
 		return err
 	}
 
@@ -411,7 +412,7 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 			deletableKeyBytePtr := uintptr(unsafe.Pointer(&deletableKeyByte[0]))
 			err = m.DeleteMapEntry(deletableKeyBytePtr)
 			if err != nil {
-				log.Info("Unable to delete entry %s but will continue", key)
+				log.Infof("Unable to delete entry %s but will continue and err %v", key, err)
 			}
 		}
 	}
