@@ -2,6 +2,7 @@ package ebpf
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
 	"github.com/vishvananda/netlink"
@@ -189,4 +190,36 @@ func TCEgressDetach(interfaceName string) error {
 		}
 	}
 	return fmt.Errorf("Detach failed on egress interface - %s", interfaceName)
+}
+
+func CleanupQdiscs(prefix string) error {
+	var log = logger.Get()
+
+	if prefix == "" {
+		log.Infof("Prefix should be given")
+		return nil
+	}
+
+	linkList, err := netlink.LinkList()
+	if err != nil {
+		log.Infof("Unable to get link list")
+		return err
+	}
+
+	for _, link := range linkList {
+		linkName := link.Attrs().Name
+		if strings.HasPrefix(linkName, prefix) {
+			log.Infof("Trying to cleanup on %s", linkName)
+			err = TCIngressDetach(linkName)
+			if err != nil {
+				log.Infof("Failed to detach ingress, might not be present so moving on")
+			}
+
+			err = TCEgressDetach(linkName)
+			if err != nil {
+				log.Infof("Failed to detach ingress, might not be present so moving on")
+			}
+		}
+	}
+	return nil
 }
