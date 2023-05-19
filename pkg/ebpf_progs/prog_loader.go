@@ -24,6 +24,7 @@ const (
 
 type BpfProgAPIs interface {
 	PinProg(progFD uint32, pinPath string) error
+	UnPinProg(pinPath string) error
 	LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error)
 }
 
@@ -81,6 +82,10 @@ func (m *BPFProgram) PinProg(progFD uint32, pinPath string) error {
 	}
 
 	return ebpf_maps.PinObject(progFD, pinPath)
+}
+
+func (m *BPFProgram) UnPinProg(pinPath string) error {
+	return ebpf_maps.UnPinObject(pinPath)
 }
 
 func (m *BPFProgram) LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error) {

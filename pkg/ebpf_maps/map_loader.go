@@ -99,6 +99,7 @@ type BpfMapAttr struct {
 type BpfMapAPIs interface {
 	CreateMap(MapMetaData BpfMapData) (BPFMap, error)
 	PinMap(pinPath string) error
+	UnPinMap(pinPath string) error
 	CreateMapEntry(key, value uintptr) error
 	UpdateMapEntry(key, value uintptr) error
 	CreateUpdateMap(key, value uintptr, updateFlags uint64) error
@@ -182,8 +183,25 @@ func (m *BPFMap) PinMap(pinPath string) error {
 
 }
 
+func (m *BPFMap) UnPinMap(pinPath string) error {
+	return UnPinObject(pinPath)
+}
+
 func PinObject(objFD uint32, pinPath string) error {
 	var log = logger.Get()
+
+	if pinPath == "" {
+		return nil
+	}
+	//If pinPath is already present lets delete and create a new one
+	if isfileExists(pinPath) {
+		err := UnPinObject(pinPath)
+		if err != nil {
+			log.Infof("Failed to UnPinObject during pinning")
+			return err
+		}
+	}
+
 	cPath := []byte(pinPath + "\x00")
 
 	pinAttr := BpfPin{
@@ -208,6 +226,24 @@ func PinObject(objFD uint32, pinPath string) error {
 	//TODO : might have to return FD for node agent
 	log.Infof("Pin done with fd : %d and errno %d", ret, errno)
 	return nil
+}
+
+func isfileExists(fname string) bool {
+	info, err := os.Stat(fname)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
+
+func UnPinObject(pinPath string) error {
+	var log = logger.Get()
+	if pinPath == "" || !isfileExists(pinPath) {
+		log.Infof("PinPath is empty or file doesn't exist")
+		return nil
+	}
+
+	return os.Remove(pinPath)
 }
 
 func (m *BPFMap) CreateMapEntry(key, value uintptr) error {
@@ -404,7 +440,7 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 	retrievedMapKeyList, err := m.GetAllMapKeys()
 	if err != nil {
 		log.Infof("Get all map keys failed: during Refresh %v", err)
-		return err	
+		return err
 	}
 
 	// 4. Delete stale Keys
