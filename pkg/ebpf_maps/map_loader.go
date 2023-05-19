@@ -161,19 +161,28 @@ func (m *BPFMap) PinMap(pinPath string) error {
 
 	if m.MapMetaData.Def.Pinning == PIN_GLOBAL_NS {
 
+		//If pinPath is already present lets delete and create a new one
+		if IsfileExists(pinPath) {
+			log.Infof("Found file %s so deleting the path", pinPath)
+			err := UnPinObject(pinPath)
+			if err != nil {
+				log.Infof("Failed to UnPinObject during pinning")
+				return err
+			}
+		}
 		err := os.MkdirAll(filepath.Dir(pinPath), 0755)
 		if err != nil {
-			log.Infof("error creating directory %q: %v", filepath.Dir(pinPath), err)
-			return fmt.Errorf("error creating directory %q: %v", filepath.Dir(pinPath), err)
+			log.Infof("error creating directory %s: %v", filepath.Dir(pinPath), err)
+			return fmt.Errorf("error creating directory %s: %v", filepath.Dir(pinPath), err)
 		}
 		_, err = os.Stat(pinPath)
 		if err == nil {
-			log.Infof("aborting, found file at %q", pinPath)
-			return fmt.Errorf("aborting, found file at %q", pinPath)
+			log.Infof("aborting, found file at %s", pinPath)
+			return fmt.Errorf("aborting, found file at %s", pinPath)
 		}
 		if err != nil && !os.IsNotExist(err) {
-			log.Infof("failed to stat %q: %v", pinPath, err)
-			return fmt.Errorf("failed to stat %q: %v", pinPath, err)
+			log.Infof("failed to stat %s: %v", pinPath, err)
+			return fmt.Errorf("failed to stat %s: %v", pinPath, err)
 		}
 
 		return PinObject(m.MapFD, pinPath)
@@ -193,15 +202,6 @@ func PinObject(objFD uint32, pinPath string) error {
 	if pinPath == "" {
 		return nil
 	}
-	//If pinPath is already present lets delete and create a new one
-	if isfileExists(pinPath) {
-		err := UnPinObject(pinPath)
-		if err != nil {
-			log.Infof("Failed to UnPinObject during pinning")
-			return err
-		}
-	}
-
 	cPath := []byte(pinPath + "\x00")
 
 	pinAttr := BpfPin{
@@ -228,7 +228,7 @@ func PinObject(objFD uint32, pinPath string) error {
 	return nil
 }
 
-func isfileExists(fname string) bool {
+func IsfileExists(fname string) bool {
 	info, err := os.Stat(fname)
 	if os.IsNotExist(err) {
 		return false
@@ -238,7 +238,7 @@ func isfileExists(fname string) bool {
 
 func UnPinObject(pinPath string) error {
 	var log = logger.Get()
-	if pinPath == "" || !isfileExists(pinPath) {
+	if pinPath == "" || !IsfileExists(pinPath) {
 		log.Infof("PinPath is empty or file doesn't exist")
 		return nil
 	}

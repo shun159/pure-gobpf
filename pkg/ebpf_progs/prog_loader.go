@@ -50,18 +50,29 @@ func mount_bpf_fs() error {
 func (m *BPFProgram) PinProg(progFD uint32, pinPath string) error {
 	var log = logger.Get()
 
-	var statfs syscall.Statfs_t
-	err := syscall.Statfs(bpfFS, &statfs)
-	if err != nil {
-		fmt.Println("Error:", err)
-		log.Infof("error checking BPF FS %v", err)
-		return fmt.Errorf("error checking BPF FS %v", err)
-	}
-
-	if statfs.Type != BPF_FS_MAGIC {
-		err = mount_bpf_fs()
+	/*
+		var statfs syscall.Statfs_t
+		err := syscall.Statfs(bpfFS, &statfs)
 		if err != nil {
-			log.Errorf("error mounting bpffs: %v", err)
+			fmt.Println("Error:", err)
+			log.Infof("error checking BPF FS %v", err)
+			return fmt.Errorf("error checking BPF FS %v", err)
+		}
+
+		if statfs.Type != BPF_FS_MAGIC {
+			err = mount_bpf_fs()
+			if err != nil {
+				log.Errorf("error mounting bpffs: %v", err)
+				return err
+			}
+		}*/
+
+	var err error
+	if ebpf_maps.IsfileExists(pinPath) {
+		log.Infof("Found file %s so deleting the path", pinPath)
+		err = ebpf_maps.UnPinObject(pinPath)
+		if err != nil {
+			log.Infof("Failed to UnPinObject during pinning")
 			return err
 		}
 	}
