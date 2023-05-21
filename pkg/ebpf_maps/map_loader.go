@@ -357,7 +357,7 @@ func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 			err = m.GetNextMapEntry(uintptr(unsafe.Pointer(&curKey[0])), uintptr(unsafe.Pointer(&nextKey[0])))
 			if errors.Is(err, unix.ENOENT) {
 				log.Infof("Done reading all entries")
-				break
+				return keyList, nil
 			}
 			if err != nil {
 				log.Infof("Unable to get next key %s", err)
