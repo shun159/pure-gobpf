@@ -1,6 +1,7 @@
 package ebpf_maps
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -326,6 +327,10 @@ func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 		uintptr(unsafe.Pointer(&attr)),
 		unsafe.Sizeof(attr),
 	)
+	if errors.Is(errno, unix.ENOENT) {
+		log.Infof("Last entry read done")
+		return errno
+	}
 	if errno != 0 {
 		log.Infof("Unable to get next map entry and ret %d and err %s", int(ret), errno)
 		return fmt.Errorf("Unable to get next map entry: %s", errno)
@@ -350,6 +355,10 @@ func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 	} else {
 		for {
 			err = m.GetNextMapEntry(uintptr(unsafe.Pointer(&curKey[0])), uintptr(unsafe.Pointer(&nextKey[0])))
+			if errors.Is(err, unix.ENOENT) {
+				log.Infof("Done reading all entries")
+				break
+			}
 			if err != nil {
 				log.Infof("Unable to get next key %s", err)
 				break
