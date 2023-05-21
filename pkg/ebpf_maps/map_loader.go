@@ -355,6 +355,7 @@ func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 	} else {
 		for {
 			err = m.GetNextMapEntry(uintptr(unsafe.Pointer(&curKey[0])), uintptr(unsafe.Pointer(&nextKey[0])))
+			log.Info("JAY -> Adding to key list %v", curKey)
 			keyList = append(keyList, string(curKey))
 			if errors.Is(err, unix.ENOENT) {
 				log.Infof("Done reading all entries")
