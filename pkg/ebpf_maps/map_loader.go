@@ -355,7 +355,7 @@ func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 	} else {
 		for {
 			err = m.GetNextMapEntry(uintptr(unsafe.Pointer(&curKey[0])), uintptr(unsafe.Pointer(&nextKey[0])))
-			log.Info("JAY -> Adding to key list %v", curKey)
+			log.Info("Adding to key list %v", curKey)
 			keyList = append(keyList, string(curKey))
 			if errors.Is(err, unix.ENOENT) {
 				log.Infof("Done reading all entries")
@@ -368,7 +368,7 @@ func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 			curKey = nextKey
 		}
 	}
-	log.Infof("Got all keys")
+	log.Infof("Done get all keys")
 	return keyList, err
 }
 
@@ -454,6 +454,7 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 		return err
 	}
 
+	/*
 	//DUMP
 	for k, _ := range newMapContents {
 		keyByte := []byte(k)
@@ -462,15 +463,14 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 	for _, key := range retrievedMapKeyList {
 		keyByte := []byte(key)
 		log.Info("JAY (SDK)-> Converted string to bytearray %v", keyByte)
-	}
+	}*/
 
 
 	// 4. Delete stale Keys
-	log.Infof("Deleting stale entries and got %d entries from BPF map", len(retrievedMapKeyList))
+	log.Infof("Check for stale entries and got %d entries from BPF map", len(retrievedMapKeyList))
 	for _, key := range retrievedMapKeyList {
 		log.Infof("Checking if key %s is deltable", key)
 		if _, ok := newMapContents[key]; !ok {
-			//This can be deleted since missing in new map data
 			log.Infof("This can be deleted, not needed anymore...")
 			deletableKeyByte := []byte(key)
 			deletableKeyBytePtr := uintptr(unsafe.Pointer(&deletableKeyByte[0]))
