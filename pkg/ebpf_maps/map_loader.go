@@ -343,10 +343,10 @@ func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 	var log = logger.Get()
 	var keyList []string
-	mapSize := m.MapMetaData.Def.KeySize
+	keySize := m.MapMetaData.Def.KeySize
 
-	curKey := make([]byte, mapSize)
-	nextKey := make([]byte, mapSize)
+	curKey := make([]byte, keySize)
+	nextKey := make([]byte, keySize)
 
 	err := m.GetFirstMapEntry(uintptr(unsafe.Pointer(&curKey[0])))
 	if err != nil {
@@ -365,7 +365,8 @@ func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 				log.Infof("Unable to get next key %s", err)
 				break
 			}
-			curKey = nextKey
+			//curKey = nextKey
+			copy(nextKey, curKey)
 		}
 	}
 	log.Infof("Done get all keys")
