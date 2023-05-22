@@ -366,7 +366,7 @@ func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 				break
 			}
 			//curKey = nextKey
-			copy(nextKey, curKey)
+			copy(curKey, nextKey)
 		}
 	}
 	log.Infof("Done get all keys")
