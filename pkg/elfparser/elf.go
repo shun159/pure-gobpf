@@ -604,7 +604,9 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 						recoveredBpfMap.MapID = uint32(newMapID)
 
 						log.Infof("JAY recovered FD - %d and ID %d", recoveredBpfMap.MapFD, recoveredBpfMap.MapID)
+						log.Infof("MapName - %s", mapName)
 
+						log.Infof("Mapinfo MapName - %v", bpfMapInfo.Name)
 						//Fill BPF map metadata
 						recoveredBpfMapMetaData := ebpf_maps.BpfMapData{
 							Def: ebpf_maps.BpfMapDef{
@@ -614,6 +616,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 								MaxEntries: bpfMapInfo.MaxEntries,
 								Flags:      bpfMapInfo.MapFlags,
 							},
+							Name: mapName,
 						}
 						recoveredBpfMap.MapMetaData = recoveredBpfMapMetaData
 						recoveredMapData[mapName] = recoveredBpfMap
