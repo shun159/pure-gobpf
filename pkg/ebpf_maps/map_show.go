@@ -117,7 +117,9 @@ func (attr *BpfMapShowAttr) BpfMapGetFDbyID() (int, error) {
 		log.Infof("Failed to get Map FD - ret %d and err %s", int(ret), errno)
 		return 0, errno
 	}
-	return int(ret), nil
+	fd := int(ret)
+	runtime.KeepAlive(fd)
+	return fd, nil
 }
 
 func (objattr *BpfObjGetInfo) BpfGetMapInfoForFD() error {
