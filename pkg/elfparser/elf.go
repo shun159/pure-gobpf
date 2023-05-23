@@ -551,23 +551,31 @@ func (c *ELFContext) doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfPr
 	return nil
 }
 
-func GetMapNameFromBPFPinPath(pinPath string) string {
+func GetMapNameFromBPFPinPath(pinPath string) (string, string) {
+	var log = logger.Get()
 	//Get non-global first
 	pinPathName := strings.Split(pinPath, "/")
-	fmt.Println("pinPathName: ", pinPathName[7])
+	log.Infof("pinPathName: ", pinPathName[7])
 
 	podIdentifier := strings.Split(pinPathName[7], "_")
+
+	replicaNamespaceNameIdentifier := strings.SplitN(pinPathName[7], "_", 2)
+
+	replicaNamespace := replicaNamespaceNameIdentifier[0]
+	MapName := replicaNamespaceNameIdentifier[1]
+
 	direction := podIdentifier[2]
 	if direction == "ingress" {
-		return "ingress_map"
+		log.Infof("Adding ingress_map -> %s", replicaNamespace)
+		return "ingress_map", replicaNamespace
 	} else if direction == "egress" {
-		return "egress_map"
+		log.Infof("Adding egress_map -> %s", replicaNamespace)
+		return "egress_map", replicaNamespace
 	}
 
-	//This is global map
-	podIdentifier = strings.SplitN(pinPathName[7], "_", 2)
-	globalMapName := podIdentifier[1]
-	return globalMapName
+	//This is global map, we cannot use global since there are multiple maps
+	log.Infof("Adding %s -> %s", MapName, MapName)
+	return MapName, MapName
 }
 
 func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
@@ -582,6 +590,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	//Pass DS here
 	loadedPrograms := make(map[string]BPFdata)
 	mapIDsToNames := make(map[int]string)
+	mapPodSelector := make(map[string]map[int]string)
 	if err := syscall.Statfs(bpfFS, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
 		log.Infof("BPF FS is mounted")
 		if err := filepath.Walk(mapbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
@@ -599,10 +608,11 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 				log.Infof("Got ID %d", mapID)
 
 				//Get map name
-				mapName := GetMapNameFromBPFPinPath(pinPath)
+				mapName, replicaNamespace := GetMapNameFromBPFPinPath(pinPath)
 
 				log.Infof("Adding ID %d to name %s", mapID, mapName)
 				mapIDsToNames[int(mapID)] = mapName
+				mapPodSelector[replicaNamespace] = mapIDsToNames
 			}
 			return nil
 		}); err != nil {
@@ -648,7 +658,17 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 						recoveredBpfMap.MapFD = uint32(newMapFD)
 						recoveredBpfMap.MapID = uint32(newMapID)
 
-						mapName := mapIDsToNames[int(recoveredBpfMap.MapID)]
+						replicaNamespaceNameIdentifier := strings.Split(pinPath, "/")
+						podIdentifier := strings.SplitN(replicaNamespaceNameIdentifier[7], "_", 2)
+						log.Infof("Found Identified - %s : %s", podIdentifier[0], podIdentifier[1])
+
+						replicaNamespace := podIdentifier[0]
+						mapIds, ok := mapPodSelector[replicaNamespace]
+						if !ok {
+							log.Infof("Failed to ID for %s", replicaNamespace)
+							return fmt.Errorf("Failed to get err")
+						}
+						mapName := mapIds[int(recoveredBpfMap.MapID)]
 
 						log.Infof("JAY recovered FD - %d and ID %d", recoveredBpfMap.MapFD, recoveredBpfMap.MapID)
 						log.Infof("MapName - %s", mapName)
