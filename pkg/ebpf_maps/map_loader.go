@@ -266,6 +266,7 @@ func (m *BPFMap) UpdateMapEntry(key, value uintptr) error {
 
 func TestGetFDFromID(mapID int) (int, error) {
 	var log = logger.Get()
+	log.Infof("Getting FD for ID - %d", mapID)
 	fileAttr := TestBpfMapShowAttr{
 		Map_id: uint32(mapID),
 	}
@@ -280,6 +281,7 @@ func TestGetFDFromID(mapID int) (int, error) {
 		return 0, errno
 	}
 	fd := int(ret)
+	log.Infof("Returning FD %d", fd)
 	runtime.KeepAlive(fd)
 	return fd, nil
 }

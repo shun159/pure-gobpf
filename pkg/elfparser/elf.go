@@ -603,6 +603,8 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 						recoveredBpfMap.MapFD = uint32(newMapFD)
 						recoveredBpfMap.MapID = uint32(newMapID)
 
+						log.Infof("JAY recovered FD - %d and ID %d", recoveredBpfMap.MapFD, recoveredBpfMap.MapID)
+
 						//Fill BPF map metadata
 						recoveredBpfMapMetaData := ebpf_maps.BpfMapData{
 							Def: ebpf_maps.BpfMapDef{
