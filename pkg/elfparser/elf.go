@@ -551,11 +551,23 @@ func (c *ELFContext) doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfPr
 	return nil
 }
 
-func GetPodIdentifierFromBPFPinPath(pinPath string) (string, string) {
+func GetMapNameFromBPFPinPath(pinPath string) string {
+	//Get non-global first
 	pinPathName := strings.Split(pinPath, "/")
 	fmt.Println("pinPathName: ", pinPathName[7])
+
 	podIdentifier := strings.Split(pinPathName[7], "_")
-	return podIdentifier[0], podIdentifier[2]
+	direction := podIdentifier[2]
+	if direction == "ingress" {
+		return "ingress_map"
+	} else if direction == "egress" {
+		return "egress_map"
+	}
+
+	//This is global map
+	podIdentifier = strings.SplitN(pinPathName[7], "_", 2)
+	globalMapName := podIdentifier[1]
+	return globalMapName
 }
 
 func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
@@ -569,7 +581,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	var statfs syscall.Statfs_t
 	//Pass DS here
 	loadedPrograms := make(map[string]BPFdata)
-	mapIDsToNames  := make(map[int]string)
+	mapIDsToNames := make(map[int]string)
 	if err := syscall.Statfs(bpfFS, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
 		log.Infof("BPF FS is mounted")
 		if err := filepath.Walk(mapbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
@@ -581,17 +593,13 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 				bpfMapInfo, err := ebpf_maps.BpfGetMapFromPinPath(pinPath)
 				if err != nil {
 					log.Infof("Error getting mapInfo for pin path, this shouldn't happen")
-					return err 
+					return err
 				}
 				mapID := bpfMapInfo.Id
 				log.Infof("Got ID %d", mapID)
 
 				//Get map name
-				_, direction := GetPodIdentifierFromBPFPinPath(pinPath)
-				mapName := "ingress_map"
-				if direction == "egress" {
-					mapName = "egress_map"
-				}
+				mapName := GetMapNameFromBPFPinPath(pinPath)
 
 				log.Infof("Adding ID %d to name %s", mapID, mapName)
 				mapIDsToNames[int(mapID)] = mapName
@@ -601,7 +609,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 			log.Infof("Error walking bpfdirectory:", err)
 			return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
 		}
-		
+
 		if err := filepath.Walk(progbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
 			if err != nil {
 				return err
@@ -639,7 +647,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 						//Fill BPF map
 						recoveredBpfMap.MapFD = uint32(newMapFD)
 						recoveredBpfMap.MapID = uint32(newMapID)
-						
+
 						mapName := mapIDsToNames[int(recoveredBpfMap.MapID)]
 
 						log.Infof("JAY recovered FD - %d and ID %d", recoveredBpfMap.MapFD, recoveredBpfMap.MapID)

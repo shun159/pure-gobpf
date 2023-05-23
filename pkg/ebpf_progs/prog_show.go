@@ -246,7 +246,7 @@ func BpfGetMapInfoFromProgInfo(progFD int, numMaps uint32) (BpfProgInfo, []ebpf_
 		mapfd, err := fileAttr.BpfMapGetFDbyID()
 		if err != nil {
 			log.Infof("Failed to get map Info")
-			return BpfProgInfo{}, nil, nil, nil,err
+			return BpfProgInfo{}, nil, nil, nil, err
 		}
 		log.Infof("Found map FD - %d", mapfd)
 
