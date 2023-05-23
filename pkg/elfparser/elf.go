@@ -574,7 +574,7 @@ func GetMapNameFromBPFPinPath(pinPath string) (string, string) {
 	log.Infof("JAYANTH ->  ", replicaNamespace, mapName)
 
 	directionIdentifier := strings.Split(replicaNamespaceNameIdentifier[7], "_")
-	direction := directionIdentifier[2]
+	direction := directionIdentifier[1]
 
 	if direction == "ingress" {
 		log.Infof("Adding ingress_map -> ", replicaNamespace)
