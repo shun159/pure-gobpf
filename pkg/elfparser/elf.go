@@ -551,6 +551,13 @@ func (c *ELFContext) doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfPr
 	return nil
 }
 
+func GetPodIdentifierFromBPFPinPath(pinPath string) (string, string) {
+	pinPathName := strings.Split(pinPath, "/")
+	fmt.Println("pinPathName: ", pinPathName[7])
+	podIdentifier := strings.Split(pinPathName[7], "_")
+	return podIdentifier[0], podIdentifier[2]
+}
+
 func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	var log = logger.Get()
 	_, err := os.Stat(bpfFS)
@@ -562,9 +569,39 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	var statfs syscall.Statfs_t
 	//Pass DS here
 	loadedPrograms := make(map[string]BPFdata)
+	mapIDsToNames  := make(map[int]string)
 	if err := syscall.Statfs(bpfFS, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
 		log.Infof("BPF FS is mounted")
+		if err := filepath.Walk(mapbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !fsinfo.IsDir() {
+				log.Infof("Dumping pinpaths - ", pinPath)
+				bpfMapInfo, err := ebpf_maps.BpfGetMapFromPinPath(pinPath)
+				if err != nil {
+					log.Infof("Error getting mapInfo for pin path, this shouldn't happen")
+					return err 
+				}
+				mapID := bpfMapInfo.Id
+				log.Infof("Got ID %d", mapID)
 
+				//Get map name
+				_, direction := GetPodIdentifierFromBPFPinPath(pinPath)
+				mapName := "ingress_map"
+				if direction == "egress" {
+					mapName = "egress_map"
+				}
+
+				log.Infof("Adding ID %d to name %s", mapID, mapName)
+				mapIDsToNames[int(mapID)] = mapName
+			}
+			return nil
+		}); err != nil {
+			log.Infof("Error walking bpfdirectory:", err)
+			return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
+		}
+		
 		if err := filepath.Walk(progbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
 			if err != nil {
 				return err
@@ -597,11 +634,13 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 						newMapFD := associatedBPFMapFDs[mapInfoIdx]
 						newMapID := associatedBPFMapIDs[mapInfoIdx]
 						recoveredBpfMap := ebpf_maps.BPFMap{}
-						mapName := unix.ByteSliceToString(bpfMapInfo.Name[:])
+						//mapName := unix.ByteSliceToString(bpfMapInfo.Name[:])
 
 						//Fill BPF map
 						recoveredBpfMap.MapFD = uint32(newMapFD)
 						recoveredBpfMap.MapID = uint32(newMapID)
+						
+						mapName := mapIDsToNames[int(recoveredBpfMap.MapID)]
 
 						log.Infof("JAY recovered FD - %d and ID %d", recoveredBpfMap.MapFD, recoveredBpfMap.MapID)
 						log.Infof("MapName - %s", mapName)
