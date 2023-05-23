@@ -554,28 +554,39 @@ func (c *ELFContext) doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfPr
 func GetMapNameFromBPFPinPath(pinPath string) (string, string) {
 	var log = logger.Get()
 	//Get non-global first
-	pinPathName := strings.Split(pinPath, "/")
-	log.Infof("pinPathName: ", pinPathName[7])
+	/*
+		pinPathName := strings.Split(pinPath, "/")
+		log.Infof("pinPathName: ", pinPathName[7])
 
-	podIdentifier := strings.Split(pinPathName[7], "_")
+		replicaNamespaceNameIdentifier := strings.SplitN(pinPathName[7], "_", 2)
 
-	replicaNamespaceNameIdentifier := strings.SplitN(pinPathName[7], "_", 2)
+		replicaNamespace := replicaNamespaceNameIdentifier[0]
+		MapName := replicaNamespaceNameIdentifier[1]
+	*/
 
-	replicaNamespace := replicaNamespaceNameIdentifier[0]
-	MapName := replicaNamespaceNameIdentifier[1]
+	replicaNamespaceNameIdentifier := strings.Split(pinPath, "/")
+	podIdentifier := strings.SplitN(replicaNamespaceNameIdentifier[7], "_", 2)
+	log.Infof("Found Identified - %s : %s", podIdentifier[0], podIdentifier[1])
 
-	direction := podIdentifier[2]
+	replicaNamespace := podIdentifier[0]
+	mapName := podIdentifier[1]
+
+	log.Infof("JAYANTH ->  ", replicaNamespace, mapName)
+
+	directionIdentifier := strings.Split(replicaNamespaceNameIdentifier[7], "_")
+	direction := directionIdentifier[2]
+
 	if direction == "ingress" {
-		log.Infof("Adding ingress_map -> %s", replicaNamespace)
+		log.Infof("Adding ingress_map -> ", replicaNamespace)
 		return "ingress_map", replicaNamespace
 	} else if direction == "egress" {
-		log.Infof("Adding egress_map -> %s", replicaNamespace)
+		log.Infof("Adding egress_map -> ", replicaNamespace)
 		return "egress_map", replicaNamespace
 	}
 
 	//This is global map, we cannot use global since there are multiple maps
-	log.Infof("Adding %s -> %s", MapName, MapName)
-	return MapName, MapName
+	log.Infof("Adding GLOBAL %s -> %s", mapName, mapName)
+	return mapName, mapName
 }
 
 func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
@@ -610,7 +621,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 				//Get map name
 				mapName, replicaNamespace := GetMapNameFromBPFPinPath(pinPath)
 
-				log.Infof("Adding ID %d to name %s", mapID, mapName)
+				log.Infof("Adding ID %d to name %s and NS %s", mapID, mapName, replicaNamespace)
 				mapIDsToNames[int(mapID)] = mapName
 				mapPodSelector[replicaNamespace] = mapIDsToNames
 			}
