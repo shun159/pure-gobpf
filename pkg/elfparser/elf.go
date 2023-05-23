@@ -196,6 +196,14 @@ func (c *ELFContext) loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, el
 		pinPath := mapbpfFS + mapNameStr
 		bpfMap.PinMap(pinPath)
 
+		//Fill ID
+		mapInfo, err := ebpf_maps.BpfGetMapFromPinPath(pinPath)
+		if err != nil {
+			return fmt.Errorf("map '%s' doesn't exist", mapNameStr)
+		}
+		map_id := uint32(mapInfo.Id)
+		bpfMap.MapID = map_id
+
 		c.Maps[loadedMaps.Name] = bpfMap
 	}
 	return nil

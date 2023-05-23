@@ -31,18 +31,19 @@ const (
 	BPF_MAP_TYPE_DEVMAP           = 14
 
 	// BPF syscall command constants. Must match enum bpf_cmd from linux/bpf.h
-	BPF_MAP_CREATE        = 0
-	BPF_MAP_LOOKUP_ELEM   = 1
-	BPF_MAP_UPDATE_ELEM   = 2
-	BPF_MAP_DELETE_ELEM   = 3
-	BPF_MAP_GET_NEXT_KEY  = 4
-	BPF_PROG_LOAD         = 5
-	BPF_OBJ_PIN           = 6
-	BPF_PROG_ATTACH       = 8
-	BPF_PROG_DETACH       = 9
-	BPF_PROG_TEST_RUN     = 10
-	BPF_PROG_GET_NEXT_ID  = 11
-	BPF_PROG_GET_FD_BY_ID = 13
+	BPF_MAP_CREATE            = 0
+	BPF_MAP_LOOKUP_ELEM       = 1
+	BPF_MAP_UPDATE_ELEM       = 2
+	BPF_MAP_DELETE_ELEM       = 3
+	BPF_MAP_GET_NEXT_KEY      = 4
+	BPF_PROG_LOAD             = 5
+	BPF_OBJ_PIN               = 6
+	BPF_PROG_ATTACH           = 8
+	BPF_PROG_DETACH           = 9
+	BPF_PROG_TEST_RUN         = 10
+	BPF_PROG_GET_NEXT_ID      = 11
+	BPF_PROG_GET_FD_BY_ID     = 13
+	TEST_BPF_MAP_GET_FD_BY_ID = 14
 
 	// Flags for BPF_MAP_UPDATE_ELEM. Must match values from linux/bpf.h
 	BPF_ANY     = 0
@@ -64,7 +65,14 @@ const (
 
 type BPFMap struct {
 	MapFD       uint32
+	MapID       uint32
 	MapMetaData BpfMapData
+}
+
+type TestBpfMapShowAttr struct {
+	Map_id     uint32
+	next_id    uint32
+	open_flags uint32
 }
 
 type BpfMapDef struct {
@@ -256,12 +264,38 @@ func (m *BPFMap) UpdateMapEntry(key, value uintptr) error {
 	return m.CreateUpdateMap(key, value, uint64(BPF_ANY))
 }
 
+func TestGetFDFromID(mapID int) (int, error) {
+	var log = logger.Get()
+	fileAttr := TestBpfMapShowAttr{
+		Map_id: uint32(mapID),
+	}
+	ret, _, errno := unix.Syscall(
+		unix.SYS_BPF,
+		TEST_BPF_MAP_GET_FD_BY_ID,
+		uintptr(unsafe.Pointer(&fileAttr)),
+		unsafe.Sizeof(fileAttr),
+	)
+	if errno != 0 {
+		log.Infof("Failed to get Map FD - ret %d and err %s", int(ret), errno)
+		return 0, errno
+	}
+	fd := int(ret)
+	runtime.KeepAlive(fd)
+	return fd, nil
+}
+
 func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64) error {
 
 	var log = logger.Get()
 
+	mapFD, err := TestGetFDFromID(int(m.MapID))
+	if err != nil {
+		log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+		return fmt.Errorf("Unable to get FD: %s", err)
+	}
+
 	attr := BpfMapAttr{
-		MapFD: m.MapFD,
+		MapFD: uint32(mapFD),
 		Flags: updateFlags,
 		Key:   uint64(key),
 		Value: uint64(value),
@@ -288,8 +322,13 @@ func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 
 	var log = logger.Get()
 
+	mapFD, err := TestGetFDFromID(int(m.MapID))
+	if err != nil {
+		log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+		return fmt.Errorf("Unable to get FD: %s", err)
+	}
 	attr := BpfMapAttr{
-		MapFD: m.MapFD,
+		MapFD: uint32(mapFD),
 		Key:   uint64(key),
 	}
 	ret, _, errno := unix.Syscall(
@@ -316,8 +355,13 @@ func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 
 	var log = logger.Get()
 
+	mapFD, err := TestGetFDFromID(int(m.MapID))
+	if err != nil {
+		log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+		return fmt.Errorf("Unable to get FD: %s", err)
+	}
 	attr := BpfMapAttr{
-		MapFD: m.MapFD,
+		MapFD: uint32(mapFD),
 		Key:   uint64(key),
 		Value: uint64(nextKey),
 	}
@@ -377,8 +421,13 @@ func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 
 	var log = logger.Get()
 
+	mapFD, err := TestGetFDFromID(int(m.MapID))
+	if err != nil {
+		log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+		return fmt.Errorf("Unable to get FD: %s", err)
+	}
 	attr := BpfMapAttr{
-		MapFD: m.MapFD,
+		MapFD: uint32(mapFD),
 		Key:   uint64(key),
 		Value: uint64(value),
 	}
@@ -456,16 +505,15 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 	}
 
 	/*
-	//DUMP
-	for k, _ := range newMapContents {
-		keyByte := []byte(k)
-		log.Info("JAY (NA)-> Converted string to bytearray %v", keyByte)
-	}
-	for _, key := range retrievedMapKeyList {
-		keyByte := []byte(key)
-		log.Info("JAY (SDK)-> Converted string to bytearray %v", keyByte)
-	}*/
-
+		//DUMP
+		for k, _ := range newMapContents {
+			keyByte := []byte(k)
+			log.Info("JAY (NA)-> Converted string to bytearray %v", keyByte)
+		}
+		for _, key := range retrievedMapKeyList {
+			keyByte := []byte(key)
+			log.Info("JAY (SDK)-> Converted string to bytearray %v", keyByte)
+		}*/
 
 	// 4. Delete stale Keys
 	log.Infof("Check for stale entries and got %d entries from BPF map", len(retrievedMapKeyList))
