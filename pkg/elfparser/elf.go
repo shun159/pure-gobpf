@@ -587,7 +587,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 				recoveredMapData := make(map[string]ebpf_maps.BPFMap)
 				if bpfProgInfo.NrMapIDs > 0 {
 					log.Infof("Have associated maps to link")
-					_, associatedBpfMapList, associatedBPFMapFDs, err := ebpf_progs.BpfGetMapInfoFromProgInfo(progFD, bpfProgInfo.NrMapIDs)
+					_, associatedBpfMapList, associatedBPFMapFDs, associatedBPFMapIDs, err := ebpf_progs.BpfGetMapInfoFromProgInfo(progFD, bpfProgInfo.NrMapIDs)
 					if err != nil {
 						log.Infof("Failed to get associated maps")
 						return err
@@ -595,11 +595,13 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 					for mapInfoIdx := 0; mapInfoIdx < len(associatedBpfMapList); mapInfoIdx++ {
 						bpfMapInfo := associatedBpfMapList[mapInfoIdx]
 						newMapFD := associatedBPFMapFDs[mapInfoIdx]
+						newMapID := associatedBPFMapIDs[mapInfoIdx]
 						recoveredBpfMap := ebpf_maps.BPFMap{}
 						mapName := unix.ByteSliceToString(bpfMapInfo.Name[:])
 
 						//Fill BPF map
 						recoveredBpfMap.MapFD = uint32(newMapFD)
+						recoveredBpfMap.MapID = uint32(newMapID)
 
 						//Fill BPF map metadata
 						recoveredBpfMapMetaData := ebpf_maps.BpfMapData{
