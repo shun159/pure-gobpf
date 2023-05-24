@@ -173,7 +173,7 @@ func (m *BPFMap) PinMap(pinPath string) error {
 		//If pinPath is already present lets delete and create a new one
 		if IsfileExists(pinPath) {
 			log.Infof("Found file %s so deleting the path", pinPath)
-			err := UnPinObject(pinPath)
+			err := UnPinObject(pinPath, int(m.MapFD))
 			if err != nil {
 				log.Infof("Failed to UnPinObject during pinning")
 				return err
@@ -202,7 +202,7 @@ func (m *BPFMap) PinMap(pinPath string) error {
 }
 
 func (m *BPFMap) UnPinMap(pinPath string) error {
-	return UnPinObject(pinPath)
+	return UnPinObject(pinPath, int(m.MapFD))
 }
 
 func PinObject(objFD uint32, pinPath string) error {
@@ -245,14 +245,24 @@ func IsfileExists(fname string) bool {
 	return !info.IsDir()
 }
 
-func UnPinObject(pinPath string) error {
+func UnPinObject(pinPath string, objFD int) error {
 	var log = logger.Get()
 	if pinPath == "" || !IsfileExists(pinPath) {
 		log.Infof("PinPath is empty or file doesn't exist")
 		return nil
 	}
 
-	return os.Remove(pinPath)
+	err := os.Remove(pinPath)
+	if err != nil {
+		log.Infof("File remove failed ", pinPath)
+		return err
+	}
+
+	if objFD <= 0 {
+		log.Infof("FD is invalid or closed %d", objFD)
+		return nil
+	}
+	return unix.Close(objFD)
 }
 
 func (m *BPFMap) CreateMapEntry(key, value uintptr) error {
