@@ -563,16 +563,6 @@ func (c *ELFContext) doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfPr
 
 func GetMapNameFromBPFPinPath(pinPath string) (string, string) {
 	var log = logger.Get()
-	//Get non-global first
-	/*
-		pinPathName := strings.Split(pinPath, "/")
-		log.Infof("pinPathName: ", pinPathName[7])
-
-		replicaNamespaceNameIdentifier := strings.SplitN(pinPathName[7], "_", 2)
-
-		replicaNamespace := replicaNamespaceNameIdentifier[0]
-		MapName := replicaNamespaceNameIdentifier[1]
-	*/
 
 	replicaNamespaceNameIdentifier := strings.Split(pinPath, "/")
 	podIdentifier := strings.SplitN(replicaNamespaceNameIdentifier[7], "_", 2)
@@ -581,7 +571,7 @@ func GetMapNameFromBPFPinPath(pinPath string) (string, string) {
 	replicaNamespace := podIdentifier[0]
 	mapName := podIdentifier[1]
 
-	log.Infof("JAYANTH ->  ", replicaNamespace, mapName)
+	log.Infof("Found ->  ", replicaNamespace, mapName)
 
 	directionIdentifier := strings.Split(replicaNamespaceNameIdentifier[7], "_")
 	direction := directionIdentifier[1]
@@ -597,6 +587,105 @@ func GetMapNameFromBPFPinPath(pinPath string) (string, string) {
 	//This is global map, we cannot use global since there are multiple maps
 	log.Infof("Adding GLOBAL %s -> %s", mapName, mapName)
 	return mapName, mapName
+}
+
+func IsMapGlobal(pinPath string) bool {
+	var log = logger.Get()
+
+	replicaNamespaceNameIdentifier := strings.Split(pinPath, "/")
+	podIdentifier := strings.SplitN(replicaNamespaceNameIdentifier[7], "_", 2)
+	log.Infof("Found Identified - %s : %s", podIdentifier[0], podIdentifier[1])
+
+	replicaNamespace := podIdentifier[0]
+	mapName := podIdentifier[1]
+
+	log.Infof("Found ->  ", replicaNamespace, mapName)
+
+	directionIdentifier := strings.Split(replicaNamespaceNameIdentifier[7], "_")
+	direction := directionIdentifier[1]
+
+	if direction == "ingress" {
+		log.Infof("Found ingress_map -> ", replicaNamespace)
+		return false
+	} else if direction == "egress" {
+		log.Infof("Found egress_map -> ", replicaNamespace)
+		return false
+	}
+
+	//This is global map, we cannot use global since there are multiple maps
+	log.Infof("Found GLOBAL %s -> %s", mapName, mapName)
+	return true
+
+}
+
+func RecoverGlobalMaps() (map[string]ebpf_maps.BPFMap, error) {
+	var log = logger.Get()
+	_, err := os.Stat(bpfFS)
+	if err != nil {
+		log.Infof("BPF FS director is not present")
+		return nil, fmt.Errorf("BPF directory is not present %v", err)
+	}
+	loadedGlobalMaps := make(map[string]ebpf_maps.BPFMap)
+	var statfs syscall.Statfs_t
+	if err := syscall.Statfs(bpfFS, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
+		if err := filepath.Walk(mapbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !fsinfo.IsDir() {
+				log.Infof("Dumping pinpaths - ", pinPath)
+				if IsMapGlobal(pinPath) {
+					log.Infof("Found global pinpaths - ", pinPath)
+					bpfMapInfo, err := ebpf_maps.BpfGetMapFromPinPath(pinPath)
+					if err != nil {
+						log.Infof("Error getting mapInfo for Global pin path, this shouldn't happen")
+						return err
+					}
+					mapID := bpfMapInfo.Id
+					log.Infof("Got ID %d", mapID)
+
+					//Get map name
+					mapName, replicaNamespace := GetMapNameFromBPFPinPath(pinPath)
+
+					log.Infof("Adding ID %d to name %s and NS %s", mapID, mapName, replicaNamespace)
+
+					recoveredBpfMap := ebpf_maps.BPFMap{}
+
+					//Fill BPF map
+					recoveredBpfMap.MapID = uint32(mapID)
+					//Fill New FD since old FDs will be deleted on recovery
+					mapFD, err := ebpf_maps.TestGetFDFromID(int(mapID))
+					if err != nil {
+						log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+						return fmt.Errorf("Unable to get FD: %s", err)
+					}
+					recoveredBpfMap.MapFD = uint32(mapFD)
+					log.Infof("Recovered FD %d", mapFD)
+					//Fill BPF map metadata
+					recoveredBpfMapMetaData := ebpf_maps.BpfMapData{
+						Def: ebpf_maps.BpfMapDef{
+							Type:       bpfMapInfo.Type,
+							KeySize:    bpfMapInfo.KeySize,
+							ValueSize:  bpfMapInfo.ValueSize,
+							MaxEntries: bpfMapInfo.MaxEntries,
+							Flags:      bpfMapInfo.MapFlags,
+						},
+						Name: mapName,
+					}
+					recoveredBpfMap.MapMetaData = recoveredBpfMapMetaData
+					loadedGlobalMaps[pinPath] = recoveredBpfMap
+				}
+			}
+			return nil
+		}); err != nil {
+			log.Infof("Error walking bpfdirectory:", err)
+			return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
+		}
+	} else {
+		log.Infof("error checking BPF FS, might not be mounted %v", err)
+		return nil, fmt.Errorf("error checking BPF FS might not be mounted %v", err)
+	}
+	return loadedGlobalMaps, nil 
 }
 
 func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
@@ -675,6 +764,13 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 
 						//Fill BPF map
 						recoveredBpfMap.MapID = uint32(newMapID)
+						//Fill New FD since old FDs will be deleted on recovery
+						mapFD, err := ebpf_maps.TestGetFDFromID(int(newMapID))
+						if err != nil {
+							log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+							return fmt.Errorf("Unable to get FD: %s", err)
+						}
+						recoveredBpfMap.MapFD = uint32(mapFD)
 
 						replicaNamespaceNameIdentifier := strings.Split(pinPath, "/")
 						podIdentifier := strings.SplitN(replicaNamespaceNameIdentifier[7], "_", 2)
