@@ -173,7 +173,7 @@ func (m *BPFMap) PinMap(pinPath string) error {
 		//If pinPath is already present lets delete and create a new one
 		if IsfileExists(pinPath) {
 			log.Infof("Found file %s so deleting the path", pinPath)
-			err := UnPinObject(pinPath, int(m.MapID))
+			err := UnPinObject(pinPath, int(m.MapFD))
 			if err != nil {
 				log.Infof("Failed to UnPinObject during pinning")
 				return err
