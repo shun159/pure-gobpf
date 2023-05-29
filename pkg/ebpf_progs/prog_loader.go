@@ -30,6 +30,7 @@ type BpfProgAPIs interface {
 
 type BPFProgram struct {
 	// return program name, prog FD and pinPath
+	ProgID      int
 	ProgFD      int
 	PinPath     string
 	ProgType    string

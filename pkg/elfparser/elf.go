@@ -323,13 +323,11 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 		mapName := relocationEntry.symbol.Name
 		log.Infof("Map to be relocated; Name: %s", mapName)
 		var mapFD int
+		var map_id int
 		if progMap, ok := c.Maps[mapName]; ok {
-			mapFD = int(progMap.GetMapFD())
-			map_id, err := ebpf_maps.GetIDFromFD(mapFD)
-			if err != nil {
-				return BPFdata{}, fmt.Errorf("Failed to get ID for mapFD %d - %v", mapFD, err)
-			}
+			map_id = int(progMap.MapID)
 			mapIDToFD[map_id] = mapName
+			mapFD = int(progMap.MapFD)
 
 		} else {
 			//This might be a shared global map so get from pinpath
@@ -339,7 +337,7 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 			if err != nil {
 				return BPFdata{}, fmt.Errorf("map '%s' doesn't exist", mapName)
 			}
-			map_id := int(mapInfo.Id)
+			map_id = int(mapInfo.Id)
 			mapIDToFD[map_id] = mapName
 			mapFD, err = ebpf_maps.GetFDFromID(map_id)
 			if err != nil {
@@ -400,7 +398,18 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 						return BPFdata{}, fmt.Errorf("Failed to Load the prog")
 					}
 					log.Infof("loaded prog with %d", progFD)
+
+					//Fill ID
+					progInfo, newProgFD, err := ebpf_progs.BpfGetProgFromPinPath(pinPath)
+					if err != nil {
+						return BPFdata{}, fmt.Errorf("Failed to get ProgID")
+					}
+					//TODO : need to refactor this
+					unix.Close(int(newProgFD))
+
+					progID := int(progInfo.ID)
 					pgmList[ProgName] = ebpf_progs.BPFProgram{
+						ProgID:      progID,
 						ProgFD:      progFD,
 						PinPath:     pinPath,
 						ProgType:    progType,
@@ -426,6 +435,7 @@ func (c *ELFContext) loadElfProgSection(dataProg *elf.Section, reloSection *elf.
 					}
 
 					bpfData.Program = ebpf_progs.BPFProgram{
+						ProgID:      progID,
 						ProgFD:      progFD,
 						PinPath:     pinPath,
 						ProgType:    progType,
@@ -653,20 +663,17 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 				recoveredMapData := make(map[string]ebpf_maps.BPFMap)
 				if bpfProgInfo.NrMapIDs > 0 {
 					log.Infof("Have associated maps to link")
-					_, associatedBpfMapList, associatedBPFMapFDs, associatedBPFMapIDs, err := ebpf_progs.BpfGetMapInfoFromProgInfo(progFD, bpfProgInfo.NrMapIDs)
+					_, associatedBpfMapList, _, associatedBPFMapIDs, err := ebpf_progs.BpfGetMapInfoFromProgInfo(progFD, bpfProgInfo.NrMapIDs)
 					if err != nil {
 						log.Infof("Failed to get associated maps")
 						return err
 					}
 					for mapInfoIdx := 0; mapInfoIdx < len(associatedBpfMapList); mapInfoIdx++ {
 						bpfMapInfo := associatedBpfMapList[mapInfoIdx]
-						newMapFD := associatedBPFMapFDs[mapInfoIdx]
 						newMapID := associatedBPFMapIDs[mapInfoIdx]
 						recoveredBpfMap := ebpf_maps.BPFMap{}
-						//mapName := unix.ByteSliceToString(bpfMapInfo.Name[:])
 
 						//Fill BPF map
-						recoveredBpfMap.MapFD = uint32(newMapFD)
 						recoveredBpfMap.MapID = uint32(newMapID)
 
 						replicaNamespaceNameIdentifier := strings.Split(pinPath, "/")
@@ -680,9 +687,6 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 							return fmt.Errorf("Failed to get err")
 						}
 						mapName := mapIds[int(recoveredBpfMap.MapID)]
-
-						log.Infof("JAY recovered FD - %d and ID %d", recoveredBpfMap.MapFD, recoveredBpfMap.MapID)
-						log.Infof("MapName - %s", mapName)
 
 						log.Infof("Mapinfo MapName - %v", bpfMapInfo.Name)
 						//Fill BPF map metadata

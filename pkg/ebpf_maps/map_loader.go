@@ -118,7 +118,7 @@ type BpfMapAPIs interface {
 	GetMapEntry(key, value uintptr) error
 	BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error
 	BulkDeleteMapEntry(keyvalue map[uintptr]uintptr) error
-	GetMapFD() uint32
+	//GetMapFD() uint32
 	BulkRefreshMapEntries(newMapContents map[string]uintptr) error
 }
 
@@ -173,7 +173,7 @@ func (m *BPFMap) PinMap(pinPath string) error {
 		//If pinPath is already present lets delete and create a new one
 		if IsfileExists(pinPath) {
 			log.Infof("Found file %s so deleting the path", pinPath)
-			err := UnPinObject(pinPath, int(m.MapFD))
+			err := UnPinObject(pinPath, int(m.MapID))
 			if err != nil {
 				log.Infof("Failed to UnPinObject during pinning")
 				return err
@@ -214,7 +214,7 @@ func PinObject(objFD uint32, pinPath string) error {
 	cPath := []byte(pinPath + "\x00")
 
 	pinAttr := BpfPin{
-		Fd:       objFD,
+		Fd:       uint32(objFD),
 		Pathname: uintptr(unsafe.Pointer(&cPath[0])),
 	}
 	pinData := unsafe.Pointer(&pinAttr)
@@ -327,6 +327,7 @@ func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64) error {
 	}
 
 	log.Infof("Create/Update map entry done with fd : %d and err %s", int(ret), errno)
+	unix.Close(mapFD)
 	return nil
 }
 
@@ -355,6 +356,7 @@ func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 	}
 
 	log.Infof("Delete map entry done with fd : %d and err %s", int(ret), errno)
+	unix.Close(mapFD)
 	return nil
 }
 
@@ -385,14 +387,17 @@ func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 	)
 	if errors.Is(errno, unix.ENOENT) {
 		log.Infof("Last entry read done")
+		unix.Close(mapFD)
 		return errno
 	}
 	if errno != 0 {
 		log.Infof("Unable to get next map entry and ret %d and err %s", int(ret), errno)
+		unix.Close(mapFD)
 		return fmt.Errorf("Unable to get next map entry: %s", errno)
 	}
 
 	log.Infof("Got next map entry with fd : %d and err %s", int(ret), errno)
+	unix.Close(mapFD)
 	return nil
 }
 
@@ -451,10 +456,12 @@ func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 	)
 	if errno != 0 {
 		log.Infof("Unable to get map entry and ret %d and err %s", int(ret), errno)
+		unix.Close(mapFD)
 		return fmt.Errorf("Unable to get next map entry: %s", errno)
 	}
 
 	log.Infof("Got map entry with fd : %d and err %s", int(ret), errno)
+	unix.Close(mapFD)
 	return nil
 }
 
@@ -467,7 +474,7 @@ func (m *BPFMap) BulkDeleteMapEntry(keyvalue map[uintptr]uintptr) error {
 			return err
 		}
 	}
-	log.Infof("Bulk delete is successful for mapFD: %d", int(m.MapFD))
+	log.Infof("Bulk delete is successful for mapID: %d", int(m.MapID))
 	return nil
 }
 
@@ -481,13 +488,15 @@ func (m *BPFMap) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error {
 			return err
 		}
 	}
-	log.Infof("Bulk update is successful for mapFD: %d", int(m.MapFD))
+	log.Infof("Bulk update is successful for mapID: %d", int(m.MapID))
 	return nil
 }
 
+/*
 func (m *BPFMap) GetMapFD() uint32 {
 	return m.MapFD
 }
+*/
 
 func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error {
 	var log = logger.Get()
@@ -515,17 +524,6 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 		log.Infof("Get all map keys failed: during Refresh %v", err)
 		return err
 	}
-
-	/*
-		//DUMP
-		for k, _ := range newMapContents {
-			keyByte := []byte(k)
-			log.Info("JAY (NA)-> Converted string to bytearray %v", keyByte)
-		}
-		for _, key := range retrievedMapKeyList {
-			keyByte := []byte(key)
-			log.Info("JAY (SDK)-> Converted string to bytearray %v", keyByte)
-		}*/
 
 	// 4. Delete stale Keys
 	log.Infof("Check for stale entries and got %d entries from BPF map", len(retrievedMapKeyList))
