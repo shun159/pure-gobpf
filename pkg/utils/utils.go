@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"runtime"
@@ -67,7 +68,29 @@ const (
 	BPFObjNameLen    = 16
 	BPFProgInfoAlign = 8
 	BPFTagSize       = 8
+
+	/*
+	 * C struct of bpf_ins is 8 bytes because of this -
+	 * struct bpf_insn {
+	 *	__u8	code;
+	 * 	__u8	dst_reg:4;
+	 *	__u8	src_reg:4;
+	 * 	__s16	off;
+	 * 	__s32	imm;
+	 *	};
+	 * while go struct will return 9 since we dont have bit fields hence we dec(1).
+	 */
+	PROG_BPF_FS = "/sys/fs/bpf/globals/aws/programs/"
+	MAP_BPF_FS  = "/sys/fs/bpf/globals/aws/maps/"
 )
+
+type BPFInsn struct {
+	Code   uint8 // Opcode
+	DstReg uint8 // 4 bits: destination register, r0-r10
+	SrcReg uint8 // 4 bits: source register, r0-r10
+	Off    int16 // Signed offset
+	Imm    int32 // Immediate constant
+}
 
 type BpfPin struct {
 	Pathname  uintptr
@@ -194,4 +217,15 @@ func GetProgFDFromID(mapID int) (int, error) {
 	fd := int(ret)
 	runtime.KeepAlive(fd)
 	return fd, nil
+}
+
+// Converts BPF instruction into bytes
+func (b *BPFInsn) ConvertBPFInstructionToByteStream() []byte {
+	res := make([]byte, 8)
+	res[0] = b.Code
+	res[1] = (b.SrcReg << 4) | (b.DstReg & 0x0f)
+	binary.LittleEndian.PutUint16(res[2:], uint16(b.Off))
+	binary.LittleEndian.PutUint32(res[4:], uint32(b.Imm))
+
+	return res
 }

@@ -21,57 +21,13 @@ import (
 )
 
 var (
-	/*
-	 * C struct of bpf_ins is 8 bytes because of this -
-	 * struct bpf_insn {
-	 *	__u8	code;
-	 * 	__u8	dst_reg:4;
-	 *	__u8	src_reg:4;
-	 * 	__s16	off;
-	 * 	__s32	imm;
-	 *	};
-	 * while go struct will return 9 since we dont have bit fields hence we dec(1).
-	 */
-	bpfInsDefSize = (binary.Size(BPFInsn{}) - 1)
-	bpfMapDefSize = binary.Size(BPFMapDef{})
-	bpfFS         = "/sys/fs/bpf"
-	progbpfFS     = "/sys/fs/bpf/globals/aws/programs/"
-	mapbpfFS      = "/sys/fs/bpf/globals/aws/maps/"
-	BPF_FS_MAGIC  = 0xcafe4a11
+	bpfInsDefSize = (binary.Size(utils.BPFInsn{}) - 1)
+	bpfMapDefSize = binary.Size(ebpf_maps.BpfMapDef{})
 )
-
-type BPFMapDef struct {
-	map_type     uint32
-	key_size     uint32
-	value_size   uint32
-	max_entries  uint32
-	map_flags    uint32
-	pinning      uint32
-	inner_map_fd uint32
-}
 
 type BPFdata struct {
 	Program ebpf_progs.BPFProgram       // Return the program
 	Maps    map[string]ebpf_maps.BPFMap // List of associated maps
-}
-
-type BPFInsn struct {
-	Code   uint8 // Opcode
-	DstReg uint8 // 4 bits: destination register, r0-r10
-	SrcReg uint8 // 4 bits: source register, r0-r10
-	Off    int16 // Signed offset
-	Imm    int32 // Immediate constant
-}
-
-// Converts BPF instruction into bytes
-func (b *BPFInsn) convertBPFInstructionToByteStream() []byte {
-	res := make([]byte, 8)
-	res[0] = b.Code
-	res[1] = (b.SrcReg << 4) | (b.DstReg & 0x0f)
-	binary.LittleEndian.PutUint16(res[2:], uint16(b.Off))
-	binary.LittleEndian.PutUint32(res[4:], uint32(b.Imm))
-
-	return res
 }
 
 type relocationEntry struct {
@@ -181,7 +137,7 @@ func loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File,
 			mapNameStr = customizedPinPath + "_" + mapNameStr
 		}
 
-		pinPath := mapbpfFS + mapNameStr
+		pinPath := utils.MAP_BPF_FS + mapNameStr
 		bpfMap.PinMap(pinPath)
 
 		//Fill ID
@@ -288,7 +244,7 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 		//eBPF has one 16-byte instruction: BPF_LD | BPF_DW | BPF_IMM which consists
 		//of two consecutive 'struct bpf_insn' 8-byte blocks and interpreted as single
 		//instruction that loads 64-bit immediate value into a dst_reg.
-		ebpfInstruction := &BPFInsn{
+		ebpfInstruction := &utils.BPFInsn{
 			Code:   data[relocationEntry.relOffset],
 			DstReg: data[relocationEntry.relOffset+1] & 0xf,
 			SrcReg: data[relocationEntry.relOffset+1] >> 4,
@@ -320,7 +276,7 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 		} else {
 			//This might be a shared global map so get from pinpath
 			pinLocation := "global_" + mapName
-			globalPinPath := mapbpfFS + pinLocation
+			globalPinPath := utils.MAP_BPF_FS + pinLocation
 			mapInfo, err := ebpf_maps.BpfGetMapFromPinPath(globalPinPath)
 			if err != nil {
 				return BPFdata{}, fmt.Errorf("map '%s' doesn't exist", mapName)
@@ -336,7 +292,7 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 		log.Infof("Map found. Replace the offset with corresponding Map FD: %v", mapFD)
 		ebpfInstruction.SrcReg = 1 //dummy value for now
 		ebpfInstruction.Imm = int32(mapFD)
-		copy(data[relocationEntry.relOffset:relocationEntry.relOffset+8], ebpfInstruction.convertBPFInstructionToByteStream())
+		copy(data[relocationEntry.relOffset:relocationEntry.relOffset+8], ebpfInstruction.ConvertBPFInstructionToByteStream())
 		log.Infof("From data: BPF Instruction code: %d; offset: %d; imm: %d",
 			uint8(data[relocationEntry.relOffset]),
 			uint16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:relocationEntry.relOffset+4])),
@@ -379,7 +335,7 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 					if len(customizedPinPath) != 0 {
 						pinLocation = customizedPinPath + "_" + ProgName
 					}
-					pinPath := progbpfFS + pinLocation
+					pinPath := utils.PROG_BPF_FS + pinLocation
 					progFD, _ := bpfProgApi.LoadProg(progType, programData, license, pinPath, bpfInsDefSize)
 					if progFD == -1 {
 						log.Infof("Failed to load prog")
@@ -593,15 +549,15 @@ func IsMapGlobal(pinPath string) bool {
 
 func RecoverGlobalMaps() (map[string]ebpf_maps.BPFMap, error) {
 	var log = logger.Get()
-	_, err := os.Stat(bpfFS)
+	_, err := os.Stat(utils.BPF_DIR_MNT)
 	if err != nil {
 		log.Infof("BPF FS director is not present")
 		return nil, fmt.Errorf("BPF directory is not present %v", err)
 	}
 	loadedGlobalMaps := make(map[string]ebpf_maps.BPFMap)
 	var statfs syscall.Statfs_t
-	if err := syscall.Statfs(bpfFS, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
-		if err := filepath.Walk(mapbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
+	if err := syscall.Statfs(utils.BPF_DIR_MNT, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
+		if err := filepath.Walk(utils.MAP_BPF_FS, func(pinPath string, fsinfo os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -663,7 +619,7 @@ func RecoverGlobalMaps() (map[string]ebpf_maps.BPFMap, error) {
 
 func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	var log = logger.Get()
-	_, err := os.Stat(bpfFS)
+	_, err := os.Stat(utils.BPF_DIR_MNT)
 	if err != nil {
 		log.Infof("BPF FS director is not present")
 		return nil, fmt.Errorf("BPF directory is not present %v", err)
@@ -674,9 +630,9 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	loadedPrograms := make(map[string]BPFdata)
 	mapIDsToNames := make(map[int]string)
 	mapPodSelector := make(map[string]map[int]string)
-	if err := syscall.Statfs(bpfFS, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
+	if err := syscall.Statfs(utils.BPF_DIR_MNT, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
 		log.Infof("BPF FS is mounted")
-		if err := filepath.Walk(mapbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
+		if err := filepath.Walk(utils.MAP_BPF_FS, func(pinPath string, fsinfo os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -703,7 +659,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 			return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
 		}
 
-		if err := filepath.Walk(progbpfFS, func(pinPath string, fsinfo os.FileInfo, err error) error {
+		if err := filepath.Walk(utils.PROG_BPF_FS, func(pinPath string, fsinfo os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
