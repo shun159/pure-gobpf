@@ -46,7 +46,7 @@ func (m *BPFProgram) PinProg(progFD uint32, pinPath string) error {
 	var err error
 	if utils.IsfileExists(pinPath) {
 		log.Infof("Found file %s so deleting the path", pinPath)
-		err = utils.UnPinObject(pinPath, m.ProgFD)
+		err = utils.UnPinObject(pinPath)
 		if err != nil {
 			log.Infof("Failed to UnPinObject during pinning")
 			return err
@@ -72,7 +72,17 @@ func (m *BPFProgram) PinProg(progFD uint32, pinPath string) error {
 }
 
 func (m *BPFProgram) UnPinProg(pinPath string) error {
-	return utils.UnPinObject(pinPath, m.ProgFD)
+	var log = logger.Get()
+	err := utils.UnPinObject(pinPath)
+	if err != nil {
+		log.Infof("Failed to unpin prog")
+		return err
+	}
+	if m.ProgFD <= 0 {
+		log.Infof("FD is invalid or closed %d", m.ProgFD)
+		return nil
+	}
+	return unix.Close(int(m.ProgFD))
 }
 
 func (m *BPFProgram) LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error) {

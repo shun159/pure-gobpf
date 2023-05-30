@@ -138,7 +138,7 @@ func IsfileExists(fname string) bool {
 	return !info.IsDir()
 }
 
-func UnPinObject(pinPath string, objFD int) error {
+func UnPinObject(pinPath string) error {
 	var log = logger.Get()
 	if pinPath == "" || !IsfileExists(pinPath) {
 		log.Infof("PinPath is empty or file doesn't exist")
@@ -151,11 +151,7 @@ func UnPinObject(pinPath string, objFD int) error {
 		return err
 	}
 
-	if objFD <= 0 {
-		log.Infof("FD is invalid or closed %d", objFD)
-		return nil
-	}
-	return unix.Close(objFD)
+	return err
 }
 
 /*

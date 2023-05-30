@@ -111,9 +111,9 @@ func (m *BPFMap) PinMap(pinPath string) error {
 		//If pinPath is already present lets delete and create a new one
 		if utils.IsfileExists(pinPath) {
 			log.Infof("Found file %s so deleting the path", pinPath)
-			err := utils.UnPinObject(pinPath, int(m.MapFD))
+			err := utils.UnPinObject(pinPath)
 			if err != nil {
-				log.Infof("Failed to UnPinObject during pinning")
+				log.Infof("Failed to UnPinObject %v", err)
 				return err
 			}
 		}
@@ -140,7 +140,17 @@ func (m *BPFMap) PinMap(pinPath string) error {
 }
 
 func (m *BPFMap) UnPinMap(pinPath string) error {
-	return utils.UnPinObject(pinPath, int(m.MapFD))
+	var log = logger.Get()
+	err := utils.UnPinObject(pinPath)
+	if err != nil {
+		log.Infof("Failed to unpin map")
+		return err
+	}
+	if m.MapFD <= 0 {
+		log.Infof("FD is invalid or closed %d", m.MapFD)
+		return nil
+	}
+	return unix.Close(int(m.MapFD))
 }
 
 func (m *BPFMap) CreateMapEntry(key, value uintptr) error {
