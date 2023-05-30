@@ -9,23 +9,13 @@ import (
 
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
-)
-
-const (
-	BPF_OBJ_GET            = 7
-	BPF_PROG_GET_NEXT_ID   = 11
-	BPF_PROG_GET_FD_BY_ID  = 13
-	BPF_OBJ_GET_INFO_BY_FD = 15
-
-	BPFObjNameLen    = 16
-	BPFProgInfoAlign = 8
-	BPFTagSize       = 8
+	"github.com/jayanthvn/pure-gobpf/pkg/utils"
 )
 
 type BpfProgInfo struct {
 	Type                 uint32
 	ID                   uint32
-	Tag                  [BPFTagSize]byte
+	Tag                  [utils.BPFTagSize]byte
 	JitedProgLen         uint32
 	XlatedProgLen        uint32
 	JitedProgInsns       uint64
@@ -34,7 +24,7 @@ type BpfProgInfo struct {
 	CreatedByUID         uint32
 	NrMapIDs             uint32
 	MapIDs               uint64
-	Name                 [BPFObjNameLen]byte
+	Name                 [utils.BPFObjNameLen]byte
 	IfIndex              uint32
 	GPLCompatible        uint32 `strcut:"bitfield"`
 	Pad                  uint32 `strcut:"pad"`
@@ -63,21 +53,6 @@ type BpfProgInfo struct {
 	//AttachBTFObjID       uint32
 	//AttachBTFID          uint32
 }
-
-/*
- *
- *	struct { anonymous struct used by BPF_*_GET_*_ID
- *		union {
- *			__u32		start_id;
- *			__u32		prog_id;
- *			__u32		map_id;
- *			__u32		btf_id;
- *			__u32		link_id;
- *		};
- *		__u32		next_id;
- *		__u32		open_flags;
- *	};
- */
 
 type BpfProgAttr struct {
 	prog_id    uint32
@@ -116,7 +91,7 @@ func (attr *BpfProgAttr) isBpfProgGetNextID() bool {
 	var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_PROG_GET_NEXT_ID,
+		utils.BPF_PROG_GET_NEXT_ID,
 		uintptr(unsafe.Pointer(attr)),
 		unsafe.Sizeof(*attr),
 	)
@@ -133,7 +108,7 @@ func (attr *BpfProgAttr) BpfProgGetFDbyID() (int, error) {
 	var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_PROG_GET_FD_BY_ID,
+		utils.BPF_PROG_GET_FD_BY_ID,
 		uintptr(unsafe.Pointer(attr)),
 		unsafe.Sizeof(*attr),
 	)
@@ -148,7 +123,7 @@ func (objattr *BpfObjGetInfo) BpfGetProgramInfoForFD() error {
 	var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_OBJ_GET_INFO_BY_FD,
+		utils.BPF_OBJ_GET_INFO_BY_FD,
 		uintptr(unsafe.Pointer(objattr)),
 		unsafe.Sizeof(*objattr),
 	)
@@ -240,14 +215,21 @@ func BpfGetMapInfoFromProgInfo(progFD int, numMaps uint32) (BpfProgInfo, []ebpf_
 	for mapIdx := 0; mapIdx < len(associatedMaps); mapIdx++ {
 		log.Infof("MAP ID - %d", associatedMaps[mapIdx])
 
-		fileAttr := ebpf_maps.BpfMapShowAttr{
-			Map_id: associatedMaps[mapIdx],
-		}
-		mapfd, err := fileAttr.BpfMapGetFDbyID()
+		mapfd, err := utils.GetMapFDFromID(int(associatedMaps[mapIdx]))
 		if err != nil {
 			log.Infof("Failed to get map Info")
 			return BpfProgInfo{}, nil, nil, nil, err
 		}
+		/*
+			fileAttr := ebpf_maps.BpfMapShowAttr{
+				Map_id: associatedMaps[mapIdx],
+			}
+			mapfd, err := fileAttr.BpfMapGetFDFromID()
+			if err != nil {
+				log.Infof("Failed to get map Info")
+				return BpfProgInfo{}, nil, nil, nil, err
+			}
+		*/
 		log.Infof("Found map FD - %d", mapfd)
 
 		bpfMapInfo, err := ebpf_maps.GetBPFmapInfo(mapfd)
@@ -269,10 +251,8 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 	log.Infof("In get all prog info")
 	for attr.isBpfProgGetNextID() {
 		log.Infof("Got ID - %d", attr.next_id)
-		fileAttr := BpfProgAttr{
-			prog_id: attr.next_id,
-		}
-		progfd, err := fileAttr.BpfProgGetFDbyID()
+
+		progfd, err := utils.GetProgFDFromID(int(attr.next_id))
 		if err != nil {
 			log.Infof("Failed to get program Info")
 			return nil, err
@@ -295,7 +275,7 @@ func (attr *BpfObjGet) BpfGetObject() (int, error) {
 	var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_OBJ_GET,
+		utils.BPF_OBJ_GET,
 		uintptr(unsafe.Pointer(attr)),
 		unsafe.Sizeof(*attr),
 	)

@@ -8,18 +8,10 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_maps"
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
+	"github.com/jayanthvn/pure-gobpf/pkg/utils"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
-)
-
-const (
-	BPF_PROG_LOAD   = 5
-	BPF_PROG_ATTACH = 8
-	BPF_PROG_DETACH = 9
-	bpfFS           = "/sys/fs/bpf"
-	BPF_FS_MAGIC    = 0xcafe4a11
 )
 
 type BpfProgAPIs interface {
@@ -41,7 +33,7 @@ type BPFProgram struct {
 func mount_bpf_fs() error {
 	var log = logger.Get()
 	log.Infof("Let's mount BPF FS")
-	err := syscall.Mount("bpf", bpfFS, "bpf", 0, "mode=0700")
+	err := syscall.Mount("bpf", utils.BPF_DIR_MNT, "bpf", 0, "mode=0700")
 	if err != nil {
 		log.Errorf("error mounting bpffs: %v", err)
 	}
@@ -51,27 +43,10 @@ func mount_bpf_fs() error {
 func (m *BPFProgram) PinProg(progFD uint32, pinPath string) error {
 	var log = logger.Get()
 
-	/*
-		var statfs syscall.Statfs_t
-		err := syscall.Statfs(bpfFS, &statfs)
-		if err != nil {
-			fmt.Println("Error:", err)
-			log.Infof("error checking BPF FS %v", err)
-			return fmt.Errorf("error checking BPF FS %v", err)
-		}
-
-		if statfs.Type != BPF_FS_MAGIC {
-			err = mount_bpf_fs()
-			if err != nil {
-				log.Errorf("error mounting bpffs: %v", err)
-				return err
-			}
-		}*/
-
 	var err error
-	if ebpf_maps.IsfileExists(pinPath) {
+	if utils.IsfileExists(pinPath) {
 		log.Infof("Found file %s so deleting the path", pinPath)
-		err = ebpf_maps.UnPinObject(pinPath, m.ProgFD)
+		err = utils.UnPinObject(pinPath, m.ProgFD)
 		if err != nil {
 			log.Infof("Failed to UnPinObject during pinning")
 			return err
@@ -93,11 +68,11 @@ func (m *BPFProgram) PinProg(progFD uint32, pinPath string) error {
 		return fmt.Errorf("failed to stat %q: %v", pinPath, err)
 	}
 
-	return ebpf_maps.PinObject(progFD, pinPath)
+	return utils.PinObject(progFD, pinPath)
 }
 
 func (m *BPFProgram) UnPinProg(pinPath string) error {
-	return ebpf_maps.UnPinObject(pinPath, m.ProgFD)
+	return utils.UnPinObject(pinPath, m.ProgFD)
 }
 
 func (m *BPFProgram) LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error) {
@@ -136,7 +111,7 @@ func (m *BPFProgram) LoadProg(progType string, data []byte, licenseStr string, p
 	program.License = uintptr(unsafe.Pointer(&license[0]))
 
 	fd, _, errno := unix.Syscall(unix.SYS_BPF,
-		BPF_PROG_LOAD,
+		utils.BPF_PROG_LOAD,
 		uintptr(unsafe.Pointer(&program)),
 		unsafe.Sizeof(program))
 	runtime.KeepAlive(data)

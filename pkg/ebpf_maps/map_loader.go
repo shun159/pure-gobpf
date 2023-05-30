@@ -9,70 +9,14 @@ import (
 	"unsafe"
 
 	"github.com/jayanthvn/pure-gobpf/pkg/logger"
+	"github.com/jayanthvn/pure-gobpf/pkg/utils"
 	"golang.org/x/sys/unix"
-)
-
-const (
-	// BPF map type constants. Must match enum bpf_map_type from linux/bpf.h
-	BPF_MAP_TYPE_UNSPEC           = 0
-	BPF_MAP_TYPE_HASH             = 1
-	BPF_MAP_TYPE_ARRAY            = 2
-	BPF_MAP_TYPE_PROG_ARRAY       = 3
-	BPF_MAP_TYPE_PERF_EVENT_ARRAY = 4
-	BPF_MAP_TYPE_PERCPU_HASH      = 5
-	BPF_MAP_TYPE_PERCPU_ARRAY     = 6
-	BPF_MAP_TYPE_STACK_TRACE      = 7
-	BPF_MAP_TYPE_CGROUP_ARRAY     = 8
-	BPF_MAP_TYPE_LRU_HASH         = 9
-	BPF_MAP_TYPE_LRU_PERCPU_HASH  = 10
-	BPF_MAP_TYPE_LPM_TRIE         = 11
-	BPF_MAP_TYPE_ARRAY_OF_MAPS    = 12
-	BPF_MAP_TYPE_HASH_OF_MAPS     = 13
-	BPF_MAP_TYPE_DEVMAP           = 14
-
-	// BPF syscall command constants. Must match enum bpf_cmd from linux/bpf.h
-	BPF_MAP_CREATE            = 0
-	BPF_MAP_LOOKUP_ELEM       = 1
-	BPF_MAP_UPDATE_ELEM       = 2
-	BPF_MAP_DELETE_ELEM       = 3
-	BPF_MAP_GET_NEXT_KEY      = 4
-	BPF_PROG_LOAD             = 5
-	BPF_OBJ_PIN               = 6
-	BPF_PROG_ATTACH           = 8
-	BPF_PROG_DETACH           = 9
-	BPF_PROG_TEST_RUN         = 10
-	BPF_PROG_GET_NEXT_ID      = 11
-	BPF_PROG_GET_FD_BY_ID     = 13
-	TEST_BPF_MAP_GET_FD_BY_ID = 14
-
-	// Flags for BPF_MAP_UPDATE_ELEM. Must match values from linux/bpf.h
-	BPF_ANY     = 0
-	BPF_NOEXIST = 1
-	BPF_EXIST   = 2
-
-	BPF_F_NO_PREALLOC   = 1 << 0
-	BPF_F_NO_COMMON_LRU = 1 << 1
-
-	// BPF MAP pinning
-	PIN_NONE      = 0
-	PIN_OBJECT_NS = 1
-	PIN_GLOBAL_NS = 2
-	PIN_CUSTOM_NS = 3
-
-	BPF_DIR_MNT     = "/sys/fs/bpf/"
-	BPF_DIR_GLOBALS = "globals"
 )
 
 type BPFMap struct {
 	MapFD       uint32
 	MapID       uint32
 	MapMetaData BpfMapData
-}
-
-type TestBpfMapShowAttr struct {
-	Map_id     uint32
-	next_id    uint32
-	open_flags uint32
 }
 
 type BpfMapDef struct {
@@ -89,12 +33,6 @@ type BpfMapData struct {
 	Def      BpfMapDef
 	numaNode uint32
 	Name     string
-}
-
-type BpfPin struct {
-	Pathname  uintptr
-	Fd        uint32
-	FileFlags uint32
 }
 
 type BpfMapAttr struct {
@@ -143,7 +81,7 @@ func (m *BPFMap) CreateMap(MapMetaData BpfMapData) (BPFMap, error) {
 
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_MAP_CREATE,
+		utils.BPF_MAP_CREATE,
 		uintptr(mapData),
 		mapDataSize,
 	)
@@ -164,16 +102,16 @@ func (m *BPFMap) CreateMap(MapMetaData BpfMapData) (BPFMap, error) {
 
 func (m *BPFMap) PinMap(pinPath string) error {
 	var log = logger.Get()
-	if m.MapMetaData.Def.Pinning == PIN_NONE {
+	if m.MapMetaData.Def.Pinning == utils.PIN_NONE {
 		return nil
 	}
 
-	if m.MapMetaData.Def.Pinning == PIN_GLOBAL_NS {
+	if m.MapMetaData.Def.Pinning == utils.PIN_GLOBAL_NS {
 
 		//If pinPath is already present lets delete and create a new one
-		if IsfileExists(pinPath) {
+		if utils.IsfileExists(pinPath) {
 			log.Infof("Found file %s so deleting the path", pinPath)
-			err := UnPinObject(pinPath, int(m.MapFD))
+			err := utils.UnPinObject(pinPath, int(m.MapFD))
 			if err != nil {
 				log.Infof("Failed to UnPinObject during pinning")
 				return err
@@ -194,7 +132,7 @@ func (m *BPFMap) PinMap(pinPath string) error {
 			return fmt.Errorf("failed to stat %s: %v", pinPath, err)
 		}
 
-		return PinObject(m.MapFD, pinPath)
+		return utils.PinObject(m.MapFD, pinPath)
 
 	}
 	return nil
@@ -202,107 +140,25 @@ func (m *BPFMap) PinMap(pinPath string) error {
 }
 
 func (m *BPFMap) UnPinMap(pinPath string) error {
-	return UnPinObject(pinPath, int(m.MapFD))
-}
-
-func PinObject(objFD uint32, pinPath string) error {
-	var log = logger.Get()
-
-	if pinPath == "" {
-		return nil
-	}
-	cPath := []byte(pinPath + "\x00")
-
-	pinAttr := BpfPin{
-		Fd:       uint32(objFD),
-		Pathname: uintptr(unsafe.Pointer(&cPath[0])),
-	}
-	pinData := unsafe.Pointer(&pinAttr)
-	pinDataSize := unsafe.Sizeof(pinAttr)
-
-	log.Infof("Calling BPFsys for FD %d and Path %s", objFD, pinPath)
-
-	ret, _, errno := unix.Syscall(
-		unix.SYS_BPF,
-		uintptr(BPF_OBJ_PIN),
-		uintptr(pinData),
-		uintptr(int(pinDataSize)),
-	)
-	if errno < 0 {
-		log.Infof("Unable to pin map and ret %d and err %s", int(ret), errno)
-		return fmt.Errorf("Unable to pin map: %s", errno)
-	}
-	//TODO : might have to return FD for node agent
-	log.Infof("Pin done with fd : %d and errno %d", ret, errno)
-	return nil
-}
-
-func IsfileExists(fname string) bool {
-	info, err := os.Stat(fname)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
-}
-
-func UnPinObject(pinPath string, objFD int) error {
-	var log = logger.Get()
-	if pinPath == "" || !IsfileExists(pinPath) {
-		log.Infof("PinPath is empty or file doesn't exist")
-		return nil
-	}
-
-	err := os.Remove(pinPath)
-	if err != nil {
-		log.Infof("File remove failed ", pinPath)
-		return err
-	}
-
-	if objFD <= 0 {
-		log.Infof("FD is invalid or closed %d", objFD)
-		return nil
-	}
-	return unix.Close(objFD)
+	return utils.UnPinObject(pinPath, int(m.MapFD))
 }
 
 func (m *BPFMap) CreateMapEntry(key, value uintptr) error {
-	return m.CreateUpdateMap(key, value, uint64(BPF_NOEXIST))
+	return m.CreateUpdateMap(key, value, uint64(utils.BPF_NOEXIST))
 }
 
 //TODO : This should be updated to behave like update
 func (m *BPFMap) UpdateMapEntry(key, value uintptr) error {
-	return m.CreateUpdateMap(key, value, uint64(BPF_ANY))
-}
-
-func TestGetFDFromID(mapID int) (int, error) {
-	var log = logger.Get()
-	log.Infof("Getting FD for ID - %d", mapID)
-	fileAttr := TestBpfMapShowAttr{
-		Map_id: uint32(mapID),
-	}
-	ret, _, errno := unix.Syscall(
-		unix.SYS_BPF,
-		TEST_BPF_MAP_GET_FD_BY_ID,
-		uintptr(unsafe.Pointer(&fileAttr)),
-		unsafe.Sizeof(fileAttr),
-	)
-	if errno != 0 {
-		log.Infof("Failed to get Map FD - ret %d and err %s", int(ret), errno)
-		return 0, errno
-	}
-	fd := int(ret)
-	log.Infof("Returning FD %d", fd)
-	runtime.KeepAlive(fd)
-	return fd, nil
+	return m.CreateUpdateMap(key, value, uint64(utils.BPF_ANY))
 }
 
 func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64) error {
 
 	var log = logger.Get()
 
-	mapFD, err := TestGetFDFromID(int(m.MapID))
+	mapFD, err := utils.GetMapFDFromID(int(m.MapID))
 	if err != nil {
-		log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+		log.Infof("Unable to GetMapFDfromID and ret %d and err %s", int(mapFD), err)
 		return fmt.Errorf("Unable to get FD: %s", err)
 	}
 
@@ -314,7 +170,7 @@ func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64) error {
 	}
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_MAP_UPDATE_ELEM,
+		utils.BPF_MAP_UPDATE_ELEM,
 		uintptr(unsafe.Pointer(&attr)),
 		unsafe.Sizeof(attr),
 	)
@@ -335,9 +191,9 @@ func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 
 	var log = logger.Get()
 
-	mapFD, err := TestGetFDFromID(int(m.MapID))
+	mapFD, err := utils.GetMapFDFromID(int(m.MapID))
 	if err != nil {
-		log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+		log.Infof("Unable to GetMapFDfromID and ret %d and err %s", int(mapFD), err)
 		return fmt.Errorf("Unable to get FD: %s", err)
 	}
 	attr := BpfMapAttr{
@@ -346,7 +202,7 @@ func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 	}
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_MAP_DELETE_ELEM,
+		utils.BPF_MAP_DELETE_ELEM,
 		uintptr(unsafe.Pointer(&attr)),
 		unsafe.Sizeof(attr),
 	)
@@ -369,9 +225,9 @@ func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 
 	var log = logger.Get()
 
-	mapFD, err := TestGetFDFromID(int(m.MapID))
+	mapFD, err := utils.GetMapFDFromID(int(m.MapID))
 	if err != nil {
-		log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+		log.Infof("Unable to GetMapFDfromID and ret %d and err %s", int(mapFD), err)
 		return fmt.Errorf("Unable to get FD: %s", err)
 	}
 	attr := BpfMapAttr{
@@ -381,7 +237,7 @@ func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 	}
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_MAP_GET_NEXT_KEY,
+		utils.BPF_MAP_GET_NEXT_KEY,
 		uintptr(unsafe.Pointer(&attr)),
 		unsafe.Sizeof(attr),
 	)
@@ -438,9 +294,9 @@ func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 
 	var log = logger.Get()
 
-	mapFD, err := TestGetFDFromID(int(m.MapID))
+	mapFD, err := utils.GetMapFDFromID(int(m.MapID))
 	if err != nil {
-		log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+		log.Infof("Unable to GetMapFDfromID and ret %d and err %s", int(mapFD), err)
 		return fmt.Errorf("Unable to get FD: %s", err)
 	}
 	attr := BpfMapAttr{
@@ -450,7 +306,7 @@ func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 	}
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
-		BPF_MAP_LOOKUP_ELEM,
+		utils.BPF_MAP_LOOKUP_ELEM,
 		uintptr(unsafe.Pointer(&attr)),
 		unsafe.Sizeof(attr),
 	)
@@ -491,12 +347,6 @@ func (m *BPFMap) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error {
 	log.Infof("Bulk update is successful for mapID: %d", int(m.MapID))
 	return nil
 }
-
-/*
-func (m *BPFMap) GetMapFD() uint32 {
-	return m.MapFD
-}
-*/
 
 func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error {
 	var log = logger.Get()
