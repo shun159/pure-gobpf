@@ -243,13 +243,17 @@ func BpfGetMapFromPinPath(pinPath string) (BpfMapInfo, error) {
 		return BpfMapInfo{}, err
 
 	}
-	runtime.KeepAlive(mapFD)
 
-	log.Infof("Got progFD - %d", mapFD)
+	log.Infof("Got mapFD - %d", mapFD)
 	bpfMapInfo, err := GetBPFmapInfo(mapFD)
 	if err != nil {
 		log.Infof("Failed to get map Info for FD - %d", mapFD)
 		return bpfMapInfo, err
+	}
+	log.Infof("Close FD now...")
+	err = unix.Close(int(mapFD))
+	if err != nil {
+		log.Infof("Failed to close but return the mapinfo")
 	}
 
 	return bpfMapInfo, nil
