@@ -197,7 +197,6 @@ func (rb *RingBuffer) eventsPoller() {
 func (rb *RingBuffer) poll(events []unix.EpollEvent) int {
 
 	timeoutMs := 150
-	var log = logger.Get()
 	n, err := unix.EpollWait(rb.EpollFD, events, timeoutMs)
 	if err != nil {
 		return 0
