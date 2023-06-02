@@ -634,7 +634,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 
 	mapsDirExists := true
 	progsDirExists := true
-	_, err = os.Stat(utils.MAP_BPF_FS) 
+	_, err = os.Stat(utils.MAP_BPF_FS)
 	if err != nil {
 		mapsDirExists = false
 	}
