@@ -621,7 +621,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	var log = logger.Get()
 	_, err := os.Stat(utils.BPF_DIR_MNT)
 	if err != nil {
-		log.Infof("BPF FS director is not present")
+		log.Infof("BPF FS directory is not present")
 		return nil, fmt.Errorf("BPF directory is not present %v", err)
 	}
 
@@ -630,117 +630,146 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	loadedPrograms := make(map[string]BPFdata)
 	mapIDsToNames := make(map[int]string)
 	mapPodSelector := make(map[string]map[int]string)
+	mapIDsToFDs := make(map[int]int)
+
+	mapsDirExists := true
+	progsDirExists := true
+	_, err = os.Stat(utils.MAP_BPF_FS) 
+	if err != nil {
+		mapsDirExists = false
+	}
+
+	_, err = os.Stat(utils.PROG_BPF_FS)
+	if err != nil {
+		progsDirExists = false
+	}
+
 	if err := syscall.Statfs(utils.BPF_DIR_MNT, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
 		log.Infof("BPF FS is mounted")
-		if err := filepath.Walk(utils.MAP_BPF_FS, func(pinPath string, fsinfo os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !fsinfo.IsDir() {
-				log.Infof("Dumping pinpaths - ", pinPath)
-				bpfMapInfo, err := ebpf_maps.BpfGetMapFromPinPath(pinPath)
+		if mapsDirExists {
+			if err := filepath.Walk(utils.MAP_BPF_FS, func(pinPath string, fsinfo os.FileInfo, err error) error {
 				if err != nil {
-					log.Infof("Error getting mapInfo for pin path, this shouldn't happen")
 					return err
 				}
-				mapID := bpfMapInfo.Id
-				log.Infof("Got ID %d", mapID)
-
-				//Get map name
-				mapName, replicaNamespace := GetMapNameFromBPFPinPath(pinPath)
-
-				log.Infof("Adding ID %d to name %s and NS %s", mapID, mapName, replicaNamespace)
-				mapIDsToNames[int(mapID)] = mapName
-				mapPodSelector[replicaNamespace] = mapIDsToNames
-			}
-			return nil
-		}); err != nil {
-			log.Infof("Error walking bpfdirectory:", err)
-			return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
-		}
-
-		if err := filepath.Walk(utils.PROG_BPF_FS, func(pinPath string, fsinfo os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !fsinfo.IsDir() {
-				log.Infof("Dumping pinpaths - ", pinPath)
-				pgmData := ebpf_progs.BPFProgram{
-					PinPath: pinPath,
-				}
-				//mapData := [string]ebpf_maps.BPFMap{}
-				bpfProgInfo, progFD, err := ebpf_progs.BpfGetProgFromPinPath(pinPath)
-				if err != nil {
-					log.Infof("Failed to progInfo for pinPath %s", pinPath)
-					return err
-				}
-				pgmData.ProgFD = progFD
-				//Conv type to string here
-				//pgmData.ProgType = bpfProgInfo.Type
-
-				recoveredMapData := make(map[string]ebpf_maps.BPFMap)
-				if bpfProgInfo.NrMapIDs > 0 {
-					log.Infof("Have associated maps to link")
-					_, associatedBpfMapList, _, associatedBPFMapIDs, err := ebpf_progs.BpfGetMapInfoFromProgInfo(progFD, bpfProgInfo.NrMapIDs)
+				if !fsinfo.IsDir() {
+					log.Infof("Dumping pinpaths - ", pinPath)
+					bpfMapInfo, err := ebpf_maps.BpfGetMapFromPinPath(pinPath)
 					if err != nil {
-						log.Infof("Failed to get associated maps")
+						log.Infof("Error getting mapInfo for pin path, this shouldn't happen")
 						return err
 					}
-					for mapInfoIdx := 0; mapInfoIdx < len(associatedBpfMapList); mapInfoIdx++ {
-						bpfMapInfo := associatedBpfMapList[mapInfoIdx]
-						newMapID := associatedBPFMapIDs[mapInfoIdx]
-						recoveredBpfMap := ebpf_maps.BPFMap{}
+					mapID := bpfMapInfo.Id
+					log.Infof("Got ID %d", mapID)
+					//Fill New FD since old FDs will be deleted on recovery
+					mapFD, err := utils.GetMapFDFromID(int(mapID))
+					if err != nil {
+						log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
+						return fmt.Errorf("Unable to get FD: %s", err)
+					}
+					log.Infof("Got FD %d", mapFD)
+					mapIDsToFDs[int(mapID)] = mapFD
 
-						//Fill BPF map
-						recoveredBpfMap.MapID = uint32(newMapID)
-						//Fill New FD since old FDs will be deleted on recovery
-						mapFD, err := utils.GetMapFDFromID(int(newMapID))
-						if err != nil {
-							log.Infof("Unable to GetFDfromID and ret %d and err %s", int(mapFD), err)
-							return fmt.Errorf("Unable to get FD: %s", err)
-						}
-						recoveredBpfMap.MapFD = uint32(mapFD)
+					//Get map name
+					mapName, replicaNamespace := GetMapNameFromBPFPinPath(pinPath)
 
-						replicaNamespaceNameIdentifier := strings.Split(pinPath, "/")
-						podIdentifier := strings.SplitN(replicaNamespaceNameIdentifier[7], "_", 2)
-						log.Infof("Found Identified - %s : %s", podIdentifier[0], podIdentifier[1])
+					log.Infof("Adding ID %d to name %s and NS %s", mapID, mapName, replicaNamespace)
+					mapIDsToNames[int(mapID)] = mapName
+					mapPodSelector[replicaNamespace] = mapIDsToNames
+				}
+				return nil
+			}); err != nil {
+				log.Infof("Error walking bpfdirectory:", err)
+				return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
+			}
+		}
 
-						replicaNamespace := podIdentifier[0]
-						mapIds, ok := mapPodSelector[replicaNamespace]
-						if !ok {
-							log.Infof("Failed to ID for %s", replicaNamespace)
-							return fmt.Errorf("Failed to get err")
-						}
-						mapName := mapIds[int(recoveredBpfMap.MapID)]
+		if progsDirExists {
+			if err := filepath.Walk(utils.PROG_BPF_FS, func(pinPath string, fsinfo os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if !fsinfo.IsDir() {
+					log.Infof("Dumping pinpaths - ", pinPath)
+					pgmData := ebpf_progs.BPFProgram{
+						PinPath: pinPath,
+					}
+					replicaNamespaceNameIdentifier := strings.Split(pinPath, "/")
+					podIdentifier := strings.SplitN(replicaNamespaceNameIdentifier[7], "_", 2)
+					log.Infof("Found Identified - %s : %s", podIdentifier[0], podIdentifier[1])
 
-						log.Infof("Mapinfo MapName - %v", bpfMapInfo.Name)
-						//Fill BPF map metadata
-						recoveredBpfMapMetaData := ebpf_maps.BpfMapData{
-							Def: ebpf_maps.BpfMapDef{
-								Type:       bpfMapInfo.Type,
-								KeySize:    bpfMapInfo.KeySize,
-								ValueSize:  bpfMapInfo.ValueSize,
-								MaxEntries: bpfMapInfo.MaxEntries,
-								Flags:      bpfMapInfo.MapFlags,
-							},
-							Name: mapName,
-						}
-						recoveredBpfMap.MapMetaData = recoveredBpfMapMetaData
-						recoveredMapData[mapName] = recoveredBpfMap
+					replicaNamespace := podIdentifier[0]
+					if replicaNamespace == "global" {
+						log.Infof("Skipping global progs")
+						return nil
 					}
 
+					//mapData := [string]ebpf_maps.BPFMap{}
+					bpfProgInfo, progFD, err := ebpf_progs.BpfGetProgFromPinPath(pinPath)
+					if err != nil {
+						log.Infof("Failed to progInfo for pinPath %s", pinPath)
+						return err
+					}
+					pgmData.ProgFD = progFD
+					//Conv type to string here
+
+					recoveredMapData := make(map[string]ebpf_maps.BPFMap)
+					if bpfProgInfo.NrMapIDs > 0 {
+						log.Infof("Have associated maps to link")
+						_, associatedBpfMapList, _, associatedBPFMapIDs, err := ebpf_progs.BpfGetMapInfoFromProgInfo(progFD, bpfProgInfo.NrMapIDs)
+						if err != nil {
+							log.Infof("Failed to get associated maps")
+							return err
+						}
+						for mapInfoIdx := 0; mapInfoIdx < len(associatedBpfMapList); mapInfoIdx++ {
+							bpfMapInfo := associatedBpfMapList[mapInfoIdx]
+							newMapID := associatedBPFMapIDs[mapInfoIdx]
+							recoveredBpfMap := ebpf_maps.BPFMap{}
+
+							//Fill BPF map
+							recoveredBpfMap.MapID = uint32(newMapID)
+							//Fill New FD since old FDs will be deleted on recovery
+							mapFD, ok := mapIDsToFDs[int(newMapID)]
+							if !ok {
+								log.Infof("Unable to Get FD from ID %d", int(newMapID))
+								return fmt.Errorf("Unable to get FD")
+							}
+							recoveredBpfMap.MapFD = uint32(mapFD)
+
+							mapIds, ok := mapPodSelector[replicaNamespace]
+							if !ok {
+								log.Infof("Failed to ID for %s", replicaNamespace)
+								return fmt.Errorf("Failed to get err")
+							}
+							mapName := mapIds[int(recoveredBpfMap.MapID)]
+
+							log.Infof("Mapinfo MapName - %v", bpfMapInfo.Name)
+							//Fill BPF map metadata
+							recoveredBpfMapMetaData := ebpf_maps.BpfMapData{
+								Def: ebpf_maps.BpfMapDef{
+									Type:       bpfMapInfo.Type,
+									KeySize:    bpfMapInfo.KeySize,
+									ValueSize:  bpfMapInfo.ValueSize,
+									MaxEntries: bpfMapInfo.MaxEntries,
+									Flags:      bpfMapInfo.MapFlags,
+								},
+								Name: mapName,
+							}
+							recoveredBpfMap.MapMetaData = recoveredBpfMapMetaData
+							recoveredMapData[mapName] = recoveredBpfMap
+						}
+
+					}
+					recoveredBPFdata := BPFdata{
+						Program: pgmData,
+						Maps:    recoveredMapData,
+					}
+					loadedPrograms[pinPath] = recoveredBPFdata
 				}
-				recoveredBPFdata := BPFdata{
-					Program: pgmData,
-					Maps:    recoveredMapData,
-				}
-				loadedPrograms[pinPath] = recoveredBPFdata
-				//loadedPrograms = append(loadedPrograms, recoveredBPFdata)
+				return nil
+			}); err != nil {
+				log.Infof("Error walking bpfdirectory:", err)
+				return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
 			}
-			return nil
-		}); err != nil {
-			log.Infof("Error walking bpfdirectory:", err)
-			return nil, fmt.Errorf("Error walking the bpfdirectory %v", err)
 		}
 	} else {
 		log.Infof("error checking BPF FS, might not be mounted %v", err)
