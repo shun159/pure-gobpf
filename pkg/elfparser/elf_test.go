@@ -20,7 +20,7 @@ type testMocks struct {
 func setup(t *testing.T) *testMocks {
 	ctrl := gomock.NewController(t)
 	return &testMocks{
-		path:       "../../test/xdp_prog/xdp_fw.elf",
+		path:       "FILENAME",
 		ctrl:       ctrl,
 		ebpf_progs: mock_ebpf_progs.NewMockBpfProgAPIs(ctrl),
 		ebpf_maps:  mock_ebpf_maps.NewMockBpfMapAPIs(ctrl),

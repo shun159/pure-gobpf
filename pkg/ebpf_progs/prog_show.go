@@ -2,7 +2,6 @@ package ebpf_progs
 
 import (
 	"fmt"
-	"runtime"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -263,7 +262,7 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 			log.Infof("Failed to get program Info for FD", progfd)
 			return nil, err
 		}
-		runtime.KeepAlive(progfd)
+		unix.Close(progfd)
 
 		loadedPrograms = append(loadedPrograms, bpfProgInfo)
 	}
@@ -304,7 +303,7 @@ func BpfGetProgFromPinPath(pinPath string) (BpfProgInfo, int, error) {
 		return BpfProgInfo{}, -1, err
 
 	}
-	runtime.KeepAlive(progFD)
+	unix.Close(progFD)
 
 	log.Infof("Got progFD - %d", progFD)
 	bpfProgInfo, err := GetBPFprogInfo(progFD)

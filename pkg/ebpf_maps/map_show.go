@@ -2,7 +2,6 @@ package ebpf_maps
 
 import (
 	"fmt"
-	"runtime"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -95,25 +94,6 @@ func (attr *BpfMapShowAttr) isBpfMapGetNextID() bool {
 	return true
 }
 
-/*
-func (attr *BpfMapShowAttr) BpfMapGetFDbyID() (int, error) {
-	var log = logger.Get()
-	ret, _, errno := unix.Syscall(
-		unix.SYS_BPF,
-		utils.BPF_MAP_GET_FD_BY_ID,
-		uintptr(unsafe.Pointer(attr)),
-		unsafe.Sizeof(*attr),
-	)
-	if errno != 0 {
-		log.Infof("Failed to get Map FD - ret %d and err %s", int(ret), errno)
-		return 0, errno
-	}
-	fd := int(ret)
-	runtime.KeepAlive(fd)
-	return fd, nil
-}
-*/
-
 func (objattr *BpfObjGetInfo) BpfGetMapInfoForFD() error {
 	var log = logger.Get()
 	ret, _, errno := unix.Syscall(
@@ -202,7 +182,7 @@ func BpfGetAllMapInfo() ([]BpfMapInfo, error) {
 			log.Infof("Failed to get map Info for FD", mapfd)
 			return nil, err
 		}
-		runtime.KeepAlive(mapfd)
+		unix.Close(mapfd)
 
 		loadedMaps = append(loadedMaps, bpfMapInfo)
 	}
