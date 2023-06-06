@@ -18,6 +18,15 @@ format:       ## Format all Go source code files.
 	  -name '*.go' \
 	  -print0 | sort -z | xargs -0 -- goimports $(or $(FORMAT_FLAGS),-w) | wc -l | bc)
 
+# Build BPF
+CLANG := clang
+CLANG_INCLUDE := -I../../..
+EBPF_SOURCE := test-data/tc.ingress.bpf.c
+EBPF_BINARY := test-data/tc.ingress.bpf.elf
+build-bpf: ## Build BPF
+	$(CLANG) $(CLANG_INCLUDE) -g -O2 -Wall -fpie -target bpf -DCORE -D__BPF_TRACING__ -march=bpf -D__TARGET_ARCH_$(ARCH) -c $(EBPF_SOURCE) -o $(EBPF_BINARY)
+
+
 ##@ Run Unit Tests
 # Run unit tests
 unit-test: build-bpf

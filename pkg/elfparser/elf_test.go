@@ -30,10 +30,6 @@ func setup(t *testing.T) *testMocks {
 func TestLoadelf(t *testing.T) {
 	m := setup(t)
 	defer m.ctrl.Finish()
-	mockContext := &BPFParser{
-		//bpfMapAPIs:  m.ebpf_maps,
-		//BpfProgAPIs: m.ebpf_progs,
-	}
 	f, _ := os.Open(m.path)
 	defer f.Close()
 	ctrl := gomock.NewController(t)
@@ -43,6 +39,6 @@ func TestLoadelf(t *testing.T) {
 	mockAPIs.EXPECT().CreateMap(gomock.Any()).AnyTimes()
 	mockProgAPIs.EXPECT().LoadProg(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockAPIs.EXPECT().PinMap(gomock.Any()).AnyTimes()
-	err := mockContext.doLoadELF(f, mockAPIs, mockProgAPIs)
+	err := doLoadELF(f, mockAPIs, mockProgAPIs, "test")
 	assert.NoError(t, err)
 }
