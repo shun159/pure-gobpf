@@ -1,6 +1,7 @@
 package ebpf_maps
 
 import (
+	"errors"
 	"fmt"
 	"unsafe"
 
@@ -237,4 +238,44 @@ func BpfGetMapFromPinPath(pinPath string) (BpfMapInfo, error) {
 	}
 
 	return bpfMapInfo, nil
+}
+
+func GetFirstMapEntryByID(nextKey uintptr, mapID int) error {
+	return GetNextMapEntry(uintptr(unsafe.Pointer(nil)), nextKey, mapID)
+}
+
+func GetNextMapEntryByID(key, nextKey uintptr, mapID int) error {
+
+	var log = logger.Get()
+
+	mapFD, err := utils.GetMapFDFromID(mapID)
+	if err != nil {
+		log.Infof("Unable to GetMapFDfromID and ret %d and err %s", int(mapFD), err)
+		return fmt.Errorf("Unable to get FD: %s", err)
+	}
+	attr := BpfMapAttr{
+		MapFD: uint32(mapFD),
+		Key:   uint64(key),
+		Value: uint64(nextKey),
+	}
+	ret, _, errno := unix.Syscall(
+		unix.SYS_BPF,
+		utils.BPF_MAP_GET_NEXT_KEY,
+		uintptr(unsafe.Pointer(&attr)),
+		unsafe.Sizeof(attr),
+	)
+	if errors.Is(errno, unix.ENOENT) {
+		log.Infof("Last entry read done")
+		unix.Close(mapFD)
+		return errno
+	}
+	if errno != 0 {
+		log.Infof("Unable to get next map entry and ret %d and err %s", int(ret), errno)
+		unix.Close(mapFD)
+		return fmt.Errorf("Unable to get next map entry: %s", errno)
+	}
+
+	log.Infof("Got next map entry with fd : %d and err %s", int(ret), errno)
+	unix.Close(mapFD)
+	return nil
 }
