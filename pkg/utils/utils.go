@@ -98,6 +98,14 @@ type BpfPin struct {
 	FileFlags uint32
 }
 
+type BpfMapAttr struct {
+	MapFD uint32
+	pad0  [4]byte
+	Key   uint64
+	Value uint64 // union: value or next_key
+	Flags uint64
+}
+
 func PinObject(objFD uint32, pinPath string) error {
 	var log = logger.Get()
 

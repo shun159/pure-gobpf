@@ -241,7 +241,7 @@ func BpfGetMapFromPinPath(pinPath string) (BpfMapInfo, error) {
 }
 
 func GetFirstMapEntryByID(nextKey uintptr, mapID int) error {
-	return GetNextMapEntry(uintptr(unsafe.Pointer(nil)), nextKey, mapID)
+	return GetNextMapEntryByID(uintptr(unsafe.Pointer(nil)), nextKey, mapID)
 }
 
 func GetNextMapEntryByID(key, nextKey uintptr, mapID int) error {
@@ -253,7 +253,7 @@ func GetNextMapEntryByID(key, nextKey uintptr, mapID int) error {
 		log.Infof("Unable to GetMapFDfromID and ret %d and err %s", int(mapFD), err)
 		return fmt.Errorf("Unable to get FD: %s", err)
 	}
-	attr := BpfMapAttr{
+	attr := utils.BpfMapAttr{
 		MapFD: uint32(mapFD),
 		Key:   uint64(key),
 		Value: uint64(nextKey),
@@ -276,6 +276,37 @@ func GetNextMapEntryByID(key, nextKey uintptr, mapID int) error {
 	}
 
 	log.Infof("Got next map entry with fd : %d and err %s", int(ret), errno)
+	unix.Close(mapFD)
+	return nil
+}
+
+func GetMapEntryByID(key, value uintptr, mapID int) error {
+
+	var log = logger.Get()
+
+	mapFD, err := utils.GetMapFDFromID(mapID)
+	if err != nil {
+		log.Infof("Unable to GetMapFDfromID and ret %d and err %s", int(mapFD), err)
+		return fmt.Errorf("Unable to get FD: %s", err)
+	}
+	attr := utils.BpfMapAttr{
+		MapFD: uint32(mapFD),
+		Key:   uint64(key),
+		Value: uint64(value),
+	}
+	ret, _, errno := unix.Syscall(
+		unix.SYS_BPF,
+		utils.BPF_MAP_LOOKUP_ELEM,
+		uintptr(unsafe.Pointer(&attr)),
+		unsafe.Sizeof(attr),
+	)
+	if errno != 0 {
+		log.Infof("Unable to get map entry and ret %d and err %s", int(ret), errno)
+		unix.Close(mapFD)
+		return fmt.Errorf("Unable to get next map entry: %s", errno)
+	}
+
+	log.Infof("Got map entry with fd : %d and err %s", int(ret), errno)
 	unix.Close(mapFD)
 	return nil
 }

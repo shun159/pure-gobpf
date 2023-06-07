@@ -35,14 +35,6 @@ type BpfMapData struct {
 	Name     string
 }
 
-type BpfMapAttr struct {
-	MapFD uint32
-	pad0  [4]byte
-	Key   uint64
-	Value uint64 // union: value or next_key
-	Flags uint64
-}
-
 type BpfMapAPIs interface {
 	CreateMap(MapMetaData BpfMapData) (BPFMap, error)
 	PinMap(pinPath string) error
@@ -172,7 +164,7 @@ func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64) error {
 		return fmt.Errorf("Unable to get FD: %s", err)
 	}
 
-	attr := BpfMapAttr{
+	attr := utils.BpfMapAttr{
 		MapFD: uint32(mapFD),
 		Flags: updateFlags,
 		Key:   uint64(key),
@@ -206,7 +198,7 @@ func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 		log.Infof("Unable to GetMapFDfromID and ret %d and err %s", int(mapFD), err)
 		return fmt.Errorf("Unable to get FD: %s", err)
 	}
-	attr := BpfMapAttr{
+	attr := utils.BpfMapAttr{
 		MapFD: uint32(mapFD),
 		Key:   uint64(key),
 	}
@@ -240,7 +232,7 @@ func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 		log.Infof("Unable to GetMapFDfromID and ret %d and err %s", int(mapFD), err)
 		return fmt.Errorf("Unable to get FD: %s", err)
 	}
-	attr := BpfMapAttr{
+	attr := utils.BpfMapAttr{
 		MapFD: uint32(mapFD),
 		Key:   uint64(key),
 		Value: uint64(nextKey),
@@ -309,7 +301,7 @@ func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 		log.Infof("Unable to GetMapFDfromID and ret %d and err %s", int(mapFD), err)
 		return fmt.Errorf("Unable to get FD: %s", err)
 	}
-	attr := BpfMapAttr{
+	attr := utils.BpfMapAttr{
 		MapFD: uint32(mapFD),
 		Key:   uint64(key),
 		Value: uint64(value),
