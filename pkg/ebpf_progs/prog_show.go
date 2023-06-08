@@ -303,7 +303,6 @@ func BpfGetProgFromPinPath(pinPath string) (BpfProgInfo, int, error) {
 		return BpfProgInfo{}, -1, err
 
 	}
-	unix.Close(progFD)
 
 	log.Infof("Got progFD - %d", progFD)
 	bpfProgInfo, err := GetBPFprogInfo(progFD)
