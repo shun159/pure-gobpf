@@ -34,6 +34,48 @@ func (m *MockBpfMapAPIs) EXPECT() *MockBpfMapAPIsMockRecorder {
 	return m.recorder
 }
 
+// BulkDeleteMapEntry mocks base method.
+func (m *MockBpfMapAPIs) BulkDeleteMapEntry(arg0 map[uintptr]uintptr) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkDeleteMapEntry", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BulkDeleteMapEntry indicates an expected call of BulkDeleteMapEntry.
+func (mr *MockBpfMapAPIsMockRecorder) BulkDeleteMapEntry(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkDeleteMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).BulkDeleteMapEntry), arg0)
+}
+
+// BulkRefreshMapEntries mocks base method.
+func (m *MockBpfMapAPIs) BulkRefreshMapEntries(arg0 map[string]uintptr) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkRefreshMapEntries", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BulkRefreshMapEntries indicates an expected call of BulkRefreshMapEntries.
+func (mr *MockBpfMapAPIsMockRecorder) BulkRefreshMapEntries(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkRefreshMapEntries", reflect.TypeOf((*MockBpfMapAPIs)(nil).BulkRefreshMapEntries), arg0)
+}
+
+// BulkUpdateMapEntry mocks base method.
+func (m *MockBpfMapAPIs) BulkUpdateMapEntry(arg0 map[uintptr]uintptr) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkUpdateMapEntry", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BulkUpdateMapEntry indicates an expected call of BulkUpdateMapEntry.
+func (mr *MockBpfMapAPIsMockRecorder) BulkUpdateMapEntry(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).BulkUpdateMapEntry), arg0)
+}
+
 // CreateMap mocks base method.
 func (m *MockBpfMapAPIs) CreateMap(arg0 ebpf_maps.BpfMapData) (ebpf_maps.BPFMap, error) {
 	m.ctrl.T.Helper()
@@ -50,101 +92,87 @@ func (mr *MockBpfMapAPIsMockRecorder) CreateMap(arg0 interface{}) *gomock.Call {
 }
 
 // CreateMapEntry mocks base method.
-func (m *MockBpfMapAPIs) CreateMapEntry(arg0, arg1 uintptr, arg2 uint32) error {
+func (m *MockBpfMapAPIs) CreateMapEntry(arg0, arg1 uintptr) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateMapEntry", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateMapEntry", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateMapEntry indicates an expected call of CreateMapEntry.
-func (mr *MockBpfMapAPIsMockRecorder) CreateMapEntry(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockBpfMapAPIsMockRecorder) CreateMapEntry(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).CreateMapEntry), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).CreateMapEntry), arg0, arg1)
 }
 
 // CreateUpdateMap mocks base method.
-func (m *MockBpfMapAPIs) CreateUpdateMap(arg0, arg1 uintptr, arg2 uint64, arg3 uint32) error {
+func (m *MockBpfMapAPIs) CreateUpdateMap(arg0, arg1 uintptr, arg2 uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateUpdateMap", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "CreateUpdateMap", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateUpdateMap indicates an expected call of CreateUpdateMap.
-func (mr *MockBpfMapAPIsMockRecorder) CreateUpdateMap(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockBpfMapAPIsMockRecorder) CreateUpdateMap(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUpdateMap", reflect.TypeOf((*MockBpfMapAPIs)(nil).CreateUpdateMap), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUpdateMap", reflect.TypeOf((*MockBpfMapAPIs)(nil).CreateUpdateMap), arg0, arg1, arg2)
 }
 
 // DeleteMapEntry mocks base method.
-func (m *MockBpfMapAPIs) DeleteMapEntry(arg0 uintptr, arg1 uint32) error {
+func (m *MockBpfMapAPIs) DeleteMapEntry(arg0 uintptr) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteMapEntry", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteMapEntry", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteMapEntry indicates an expected call of DeleteMapEntry.
-func (mr *MockBpfMapAPIsMockRecorder) DeleteMapEntry(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockBpfMapAPIsMockRecorder) DeleteMapEntry(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).DeleteMapEntry), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).DeleteMapEntry), arg0)
 }
 
 // GetFirstMapEntry mocks base method.
-func (m *MockBpfMapAPIs) GetFirstMapEntry(arg0 uintptr, arg1 uint32) error {
+func (m *MockBpfMapAPIs) GetFirstMapEntry(arg0 uintptr) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetFirstMapEntry", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetFirstMapEntry", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetFirstMapEntry indicates an expected call of GetFirstMapEntry.
-func (mr *MockBpfMapAPIsMockRecorder) GetFirstMapEntry(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockBpfMapAPIsMockRecorder) GetFirstMapEntry(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFirstMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).GetFirstMapEntry), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFirstMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).GetFirstMapEntry), arg0)
 }
 
 // GetMapEntry mocks base method.
-func (m *MockBpfMapAPIs) GetMapEntry(arg0, arg1 uintptr, arg2 uint32) error {
+func (m *MockBpfMapAPIs) GetMapEntry(arg0, arg1 uintptr) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMapEntry", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetMapEntry", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetMapEntry indicates an expected call of GetMapEntry.
-func (mr *MockBpfMapAPIsMockRecorder) GetMapEntry(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockBpfMapAPIsMockRecorder) GetMapEntry(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).GetMapEntry), arg0, arg1, arg2)
-}
-
-// GetMapFD mocks base method.
-func (m *MockBpfMapAPIs) GetMapFD() uint32 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMapFD")
-	ret0, _ := ret[0].(uint32)
-	return ret0
-}
-
-// GetMapFD indicates an expected call of GetMapFD.
-func (mr *MockBpfMapAPIsMockRecorder) GetMapFD() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMapFD", reflect.TypeOf((*MockBpfMapAPIs)(nil).GetMapFD))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).GetMapEntry), arg0, arg1)
 }
 
 // GetNextMapEntry mocks base method.
-func (m *MockBpfMapAPIs) GetNextMapEntry(arg0, arg1 uintptr, arg2 uint32) error {
+func (m *MockBpfMapAPIs) GetNextMapEntry(arg0, arg1 uintptr) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNextMapEntry", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetNextMapEntry", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetNextMapEntry indicates an expected call of GetNextMapEntry.
-func (mr *MockBpfMapAPIsMockRecorder) GetNextMapEntry(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockBpfMapAPIsMockRecorder) GetNextMapEntry(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNextMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).GetNextMapEntry), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNextMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).GetNextMapEntry), arg0, arg1)
 }
 
 // PinMap mocks base method.
@@ -161,16 +189,30 @@ func (mr *MockBpfMapAPIsMockRecorder) PinMap(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PinMap", reflect.TypeOf((*MockBpfMapAPIs)(nil).PinMap), arg0)
 }
 
-// UpdateMapEntry mocks base method.
-func (m *MockBpfMapAPIs) UpdateMapEntry(arg0, arg1 uintptr, arg2 uint32) error {
+// UnPinMap mocks base method.
+func (m *MockBpfMapAPIs) UnPinMap(arg0 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateMapEntry", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "UnPinMap", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnPinMap indicates an expected call of UnPinMap.
+func (mr *MockBpfMapAPIsMockRecorder) UnPinMap(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnPinMap", reflect.TypeOf((*MockBpfMapAPIs)(nil).UnPinMap), arg0)
+}
+
+// UpdateMapEntry mocks base method.
+func (m *MockBpfMapAPIs) UpdateMapEntry(arg0, arg1 uintptr) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateMapEntry", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UpdateMapEntry indicates an expected call of UpdateMapEntry.
-func (mr *MockBpfMapAPIsMockRecorder) UpdateMapEntry(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockBpfMapAPIsMockRecorder) UpdateMapEntry(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).UpdateMapEntry), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMapEntry", reflect.TypeOf((*MockBpfMapAPIs)(nil).UpdateMapEntry), arg0, arg1)
 }

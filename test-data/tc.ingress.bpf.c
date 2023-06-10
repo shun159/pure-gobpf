@@ -17,7 +17,7 @@ struct bpf_map_def_pvt {
 
 struct lpm_trie_key {
     __u32 prefixlen;
-    __u32 ip;
+    __u8 ip[4];
 };
 
 struct lpm_trie_val {
@@ -38,12 +38,14 @@ struct bpf_map_def_pvt SEC("maps") ingress_map = {
 SEC("tc_cls")
 int handle_ingress(struct __sk_buff *skb)
 {
-	struct keystruct trie_key;
-	trie_key.prefix_len = 32;
+	struct lpm_trie_key trie_key;
+	trie_key.prefixlen = 32;
 	trie_key.ip[0] = 10; 
 	trie_key.ip[1] = 1;
 	trie_key.ip[2] = 1;
 	trie_key.ip[3] = 100;
+
+	struct lpm_trie_val *trie_val;
 	trie_val = bpf_map_lookup_elem(&ingress_map, &trie_key);
 	if (trie_val == NULL) {
 		return BPF_DROP;

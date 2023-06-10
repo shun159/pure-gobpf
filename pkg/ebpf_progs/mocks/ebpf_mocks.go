@@ -61,3 +61,17 @@ func (mr *MockBpfProgAPIsMockRecorder) PinProg(arg0, arg1 interface{}) *gomock.C
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PinProg", reflect.TypeOf((*MockBpfProgAPIs)(nil).PinProg), arg0, arg1)
 }
+
+// UnPinProg mocks base method.
+func (m *MockBpfProgAPIs) UnPinProg(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnPinProg", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnPinProg indicates an expected call of UnPinProg.
+func (mr *MockBpfProgAPIsMockRecorder) UnPinProg(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnPinProg", reflect.TypeOf((*MockBpfProgAPIs)(nil).UnPinProg), arg0)
+}

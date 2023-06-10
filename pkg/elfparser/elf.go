@@ -47,23 +47,23 @@ func IncreaseRlimit() error {
 	return nil
 }
 
-func LoadBpfFile(path, customizedPinPath string) (map[string]BPFdata, error) {
+func LoadBpfFile(path, customizedPinPath string) (map[string]BPFdata, map[string]ebpf_maps.BPFMap, error) {
 	var log = logger.Get()
 	f, err := os.Open(path)
 	if err != nil {
 		log.Infof("LoadBpfFile failed to open")
-		return nil, err
+		return nil, nil, err
 	}
 	defer f.Close()
 
 	bpfMap := &ebpf_maps.BPFMap{}
 	bpfProg := &ebpf_progs.BPFProgram{}
 
-	BPFloadedprog, err := doLoadELF(f, bpfMap, bpfProg, customizedPinPath)
+	BPFloadedprog, BPFloadedmaps, err := doLoadELF(f, bpfMap, bpfProg, customizedPinPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return BPFloadedprog, nil
+	return BPFloadedprog, BPFloadedmaps, nil
 }
 
 func loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File, bpfMapApi ebpf_maps.BpfMapAPIs, customizedPinPath string) (map[string]ebpf_maps.BPFMap, error) {
@@ -399,12 +399,12 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 	return bpfData, nil
 }
 
-func doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfProg ebpf_progs.BpfProgAPIs, customizedPinPath string) (map[string]BPFdata, error) {
+func doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfProg ebpf_progs.BpfProgAPIs, customizedPinPath string) (map[string]BPFdata, map[string]ebpf_maps.BPFMap, error) {
 	var log = logger.Get()
 	var err error
 	elfFile, err := elf.NewFile(r)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	BPFloadedprog := make(map[string]BPFdata)
@@ -418,7 +418,7 @@ func doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfProg ebpf_progs.Bp
 		if section.Name == "license" {
 			data, _ := section.Data()
 			if err != nil {
-				return nil, fmt.Errorf("Failed to read data for section %s", section.Name)
+				return nil, nil, fmt.Errorf("Failed to read data for section %s", section.Name)
 			}
 			license = string(data)
 			log.Infof("License %s", license)
@@ -436,7 +436,7 @@ func doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfProg ebpf_progs.Bp
 		loadedMaps, err = loadElfMapsSection(mapsShndx, dataMaps, elfFile, bpfMap, customizedPinPath)
 		if err != nil {
 			log.Infof("Failed to load map section")
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -483,12 +483,12 @@ func doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfProg ebpf_progs.Bp
 		bpfData, err := loadElfProgSection(dataProg, reloSectionMap[uint32(sectionIndex)], license, progType, subSystem, subProgType, sectionIndex, elfFile, bpfProg, customizedPinPath, loadedMaps)
 		if err != nil {
 			log.Infof("Failed to load the prog")
-			return nil, fmt.Errorf("Failed to load prog %q - %v", dataProg.Name, err)
+			return nil, nil, fmt.Errorf("Failed to load prog %q - %v", dataProg.Name, err)
 		}
 		BPFloadedprog[bpfData.Program.PinPath] = bpfData
 	}
 
-	return BPFloadedprog, nil
+	return BPFloadedprog, loadedMaps, nil
 }
 
 func GetMapNameFromBPFPinPath(pinPath string) (string, string) {

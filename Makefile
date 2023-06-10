@@ -26,9 +26,12 @@ EBPF_BINARY := test-data/tc.ingress.bpf.elf
 build-bpf: ## Build BPF
 	$(CLANG) $(CLANG_INCLUDE) -g -O2 -Wall -fpie -target bpf -DCORE -D__BPF_TRACING__ -march=bpf -D__TARGET_ARCH_$(ARCH) -c $(EBPF_SOURCE) -o $(EBPF_BINARY)
 
+vmlinuxh:
+	bpftool btf dump file /sys/kernel/btf/vmlinux format c > $(abspath ./test-data/vmlinux.h)
 
 ##@ Run Unit Tests
 # Run unit tests
+unit-test: vmlinuxh
 unit-test: build-bpf
 unit-test: export AWS_EBPF_SDK_LOG_FILE=stdout
 unit-test:    ## Run unit tests

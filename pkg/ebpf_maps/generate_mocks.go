@@ -12,4 +12,4 @@
 // permissions and limitations under the License.
 package ebpf_maps
 
-//go:generate go run github.com/golang/mock/mockgen -destination mocks/ebpf_mocks.go . APIs
+//go:generate go run github.com/golang/mock/mockgen -destination mocks/ebpf_mocks.go . BpfMapAPIs

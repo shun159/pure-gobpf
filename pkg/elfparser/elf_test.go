@@ -20,7 +20,7 @@ type testMocks struct {
 func setup(t *testing.T) *testMocks {
 	ctrl := gomock.NewController(t)
 	return &testMocks{
-		path:       "FILENAME",
+		path:       "../../test-data/tc.ingress.bpf.elf",
 		ctrl:       ctrl,
 		ebpf_progs: mock_ebpf_progs.NewMockBpfProgAPIs(ctrl),
 		ebpf_maps:  mock_ebpf_maps.NewMockBpfMapAPIs(ctrl),
@@ -39,6 +39,6 @@ func TestLoadelf(t *testing.T) {
 	mockAPIs.EXPECT().CreateMap(gomock.Any()).AnyTimes()
 	mockProgAPIs.EXPECT().LoadProg(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockAPIs.EXPECT().PinMap(gomock.Any()).AnyTimes()
-	err := doLoadELF(f, mockAPIs, mockProgAPIs, "test")
+	_, err := doLoadELF(f, mockAPIs, mockProgAPIs, "test")
 	assert.NoError(t, err)
 }
