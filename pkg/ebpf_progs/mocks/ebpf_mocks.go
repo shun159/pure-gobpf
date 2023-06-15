@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	ebpf_progs "github.com/jayanthvn/pure-gobpf/pkg/ebpf_progs"
 )
 
 // MockBpfProgAPIs is a mock of BpfProgAPIs interface.
@@ -31,6 +32,37 @@ func NewMockBpfProgAPIs(ctrl *gomock.Controller) *MockBpfProgAPIs {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockBpfProgAPIs) EXPECT() *MockBpfProgAPIsMockRecorder {
 	return m.recorder
+}
+
+// BpfGetProgFromPinPath mocks base method.
+func (m *MockBpfProgAPIs) BpfGetProgFromPinPath(arg0 string) (ebpf_progs.BpfProgInfo, int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BpfGetProgFromPinPath", arg0)
+	ret0, _ := ret[0].(ebpf_progs.BpfProgInfo)
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// BpfGetProgFromPinPath indicates an expected call of BpfGetProgFromPinPath.
+func (mr *MockBpfProgAPIsMockRecorder) BpfGetProgFromPinPath(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BpfGetProgFromPinPath", reflect.TypeOf((*MockBpfProgAPIs)(nil).BpfGetProgFromPinPath), arg0)
+}
+
+// GetBPFProgAssociatedMapsIDs mocks base method.
+func (m *MockBpfProgAPIs) GetBPFProgAssociatedMapsIDs(arg0 int) ([]uint32, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBPFProgAssociatedMapsIDs", arg0)
+	ret0, _ := ret[0].([]uint32)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBPFProgAssociatedMapsIDs indicates an expected call of GetBPFProgAssociatedMapsIDs.
+func (mr *MockBpfProgAPIsMockRecorder) GetBPFProgAssociatedMapsIDs(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBPFProgAssociatedMapsIDs", reflect.TypeOf((*MockBpfProgAPIs)(nil).GetBPFProgAssociatedMapsIDs), arg0)
 }
 
 // LoadProg mocks base method.

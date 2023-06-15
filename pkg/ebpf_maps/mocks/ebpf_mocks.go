@@ -34,6 +34,21 @@ func (m *MockBpfMapAPIs) EXPECT() *MockBpfMapAPIsMockRecorder {
 	return m.recorder
 }
 
+// BpfGetMapFromPinPath mocks base method.
+func (m *MockBpfMapAPIs) BpfGetMapFromPinPath(arg0 string) (ebpf_maps.BpfMapInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BpfGetMapFromPinPath", arg0)
+	ret0, _ := ret[0].(ebpf_maps.BpfMapInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BpfGetMapFromPinPath indicates an expected call of BpfGetMapFromPinPath.
+func (mr *MockBpfMapAPIsMockRecorder) BpfGetMapFromPinPath(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BpfGetMapFromPinPath", reflect.TypeOf((*MockBpfMapAPIs)(nil).BpfGetMapFromPinPath), arg0)
+}
+
 // BulkDeleteMapEntry mocks base method.
 func (m *MockBpfMapAPIs) BulkDeleteMapEntry(arg0 map[uintptr]uintptr) error {
 	m.ctrl.T.Helper()

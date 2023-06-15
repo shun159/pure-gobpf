@@ -141,7 +141,7 @@ func loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File,
 		bpfMap.PinMap(pinPath)
 
 		//Fill ID
-		mapInfo, err := ebpf_maps.BpfGetMapFromPinPath(pinPath)
+		mapInfo, err := (bpfMapApi).BpfGetMapFromPinPath(pinPath)
 		if err != nil {
 			return nil, fmt.Errorf("map '%s' doesn't exist", mapNameStr)
 		}
@@ -208,7 +208,7 @@ func parseRelocationSection(reloSection *elf.Section, elfFile *elf.File) ([]relo
 	}
 }
 
-func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, subSystem string, subProgType string, sectionIndex int, elfFile *elf.File, bpfProgApi ebpf_progs.BpfProgAPIs, customizedPinPath string, loadedMaps map[string]ebpf_maps.BPFMap) (BPFdata, error) {
+func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, subSystem string, subProgType string, sectionIndex int, elfFile *elf.File, bpfProgApi ebpf_progs.BpfProgAPIs, bpfMap ebpf_maps.BpfMapAPIs, customizedPinPath string, loadedMaps map[string]ebpf_maps.BPFMap) (BPFdata, error) {
 	var log = logger.Get()
 
 	insDefSize := bpfInsDefSize
@@ -277,7 +277,7 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 			//This might be a shared global map so get from pinpath
 			pinLocation := "global_" + mapName
 			globalPinPath := utils.MAP_BPF_FS + pinLocation
-			mapInfo, err := ebpf_maps.BpfGetMapFromPinPath(globalPinPath)
+			mapInfo, err := (bpfMap).BpfGetMapFromPinPath(globalPinPath)
 			if err != nil {
 				return BPFdata{}, fmt.Errorf("map '%s' doesn't exist", mapName)
 			}
@@ -337,14 +337,14 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 					}
 					pinPath := utils.PROG_BPF_FS + pinLocation
 					progFD, _ := bpfProgApi.LoadProg(progType, programData, license, pinPath, bpfInsDefSize)
-					if progFD == 0 {
+					if progFD == -1 {
 						log.Infof("Failed to load prog")
 						return BPFdata{}, fmt.Errorf("Failed to Load the prog")
 					}
 					log.Infof("loaded prog with %d", progFD)
 
 					//Fill ID
-					progInfo, newProgFD, err := ebpf_progs.BpfGetProgFromPinPath(pinPath)
+					progInfo, newProgFD, err := bpfProgApi.BpfGetProgFromPinPath(pinPath)
 					if err != nil {
 						return BPFdata{}, fmt.Errorf("Failed to get ProgID")
 					}
@@ -362,7 +362,7 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 					}
 
 					// TODO get prog info by FD and get list of maps..to fill
-					associatedMaps, err := ebpf_progs.GetBPFProgAssociatedMapsIDs(progFD)
+					associatedMaps, err := bpfProgApi.GetBPFProgAssociatedMapsIDs(progFD)
 					if err != nil {
 						log.Infof("Failed to load prog")
 						return BPFdata{}, fmt.Errorf("Failed to Load the prog, get associatedmapIDs failed")
@@ -480,7 +480,7 @@ func doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfProg ebpf_progs.Bp
 			continue
 		}
 		dataProg := section
-		bpfData, err := loadElfProgSection(dataProg, reloSectionMap[uint32(sectionIndex)], license, progType, subSystem, subProgType, sectionIndex, elfFile, bpfProg, customizedPinPath, loadedMaps)
+		bpfData, err := loadElfProgSection(dataProg, reloSectionMap[uint32(sectionIndex)], license, progType, subSystem, subProgType, sectionIndex, elfFile, bpfProg, bpfMap, customizedPinPath, loadedMaps)
 		if err != nil {
 			log.Infof("Failed to load the prog")
 			return nil, nil, fmt.Errorf("Failed to load prog %q - %v", dataProg.Name, err)
@@ -556,6 +556,7 @@ func RecoverGlobalMaps() (map[string]ebpf_maps.BPFMap, error) {
 		return nil, fmt.Errorf("BPF directory is not present %v", err)
 	}
 	loadedGlobalMaps := make(map[string]ebpf_maps.BPFMap)
+	var mapsApi ebpf_maps.BpfMapAPIs
 	var statfs syscall.Statfs_t
 	if err := syscall.Statfs(utils.BPF_DIR_MNT, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
 		if err := filepath.Walk(utils.MAP_BPF_FS, func(pinPath string, fsinfo os.FileInfo, err error) error {
@@ -566,7 +567,7 @@ func RecoverGlobalMaps() (map[string]ebpf_maps.BPFMap, error) {
 				log.Infof("Dumping pinpaths - ", pinPath)
 				if IsMapGlobal(pinPath) {
 					log.Infof("Found global pinpaths - ", pinPath)
-					bpfMapInfo, err := ebpf_maps.BpfGetMapFromPinPath(pinPath)
+					bpfMapInfo, err := mapsApi.BpfGetMapFromPinPath(pinPath)
 					if err != nil {
 						log.Infof("Error getting mapInfo for Global pin path, this shouldn't happen")
 						return err
@@ -627,6 +628,8 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	}
 
 	var statfs syscall.Statfs_t
+	var mapsApi ebpf_maps.BpfMapAPIs
+	var showProgApi ebpf_progs.BpfProgAPIs
 	//Pass DS here
 	loadedPrograms := make(map[string]BPFdata)
 	mapIDsToNames := make(map[int]string)
@@ -654,7 +657,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 				}
 				if !fsinfo.IsDir() {
 					log.Infof("Dumping pinpaths - ", pinPath)
-					bpfMapInfo, err := ebpf_maps.BpfGetMapFromPinPath(pinPath)
+					bpfMapInfo, err := mapsApi.BpfGetMapFromPinPath(pinPath)
 					if err != nil {
 						log.Infof("Error getting mapInfo for pin path, this shouldn't happen")
 						return err
@@ -705,7 +708,7 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 					}
 
 					//mapData := [string]ebpf_maps.BPFMap{}
-					bpfProgInfo, progFD, err := ebpf_progs.BpfGetProgFromPinPath(pinPath)
+					bpfProgInfo, progFD, err := (showProgApi).BpfGetProgFromPinPath(pinPath)
 					if err != nil {
 						log.Infof("Failed to progInfo for pinPath %s", pinPath)
 						return err
