@@ -1,4 +1,4 @@
-package ebpf
+package ebpf_tracepoint
 
 import (
 	"fmt"

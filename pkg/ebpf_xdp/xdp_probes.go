@@ -1,4 +1,4 @@
-package ebpf
+package ebpf_xdp
 
 import (
 	"fmt"
