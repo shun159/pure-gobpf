@@ -23,6 +23,8 @@ type BpfProgAPIs interface {
 	GetBPFProgAssociatedMapsIDs(progFD int) ([]uint32, error)
 }
 
+var log = logger.Get()
+
 type BPFProgram struct {
 	// return program name, prog FD and pinPath
 	ProgID      int
@@ -105,7 +107,7 @@ type BpfObjGet struct {
 }
 
 func mount_bpf_fs() error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	log.Infof("Let's mount BPF FS")
 	err := syscall.Mount("bpf", utils.BPF_DIR_MNT, "bpf", 0, "mode=0700")
 	if err != nil {
@@ -115,7 +117,7 @@ func mount_bpf_fs() error {
 }
 
 func (m *BPFProgram) PinProg(progFD uint32, pinPath string) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	var err error
 	if utils.IsfileExists(pinPath) {
@@ -146,7 +148,7 @@ func (m *BPFProgram) PinProg(progFD uint32, pinPath string) error {
 }
 
 func (m *BPFProgram) UnPinProg(pinPath string) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	err := utils.UnPinObject(pinPath)
 	if err != nil {
 		log.Infof("Failed to unpin prog")
@@ -160,7 +162,7 @@ func (m *BPFProgram) UnPinProg(pinPath string) error {
 }
 
 func (m *BPFProgram) LoadProg(progType string, data []byte, licenseStr string, pinPath string, insDefSize int) (int, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	var prog_type uint32
 	switch progType {
@@ -217,7 +219,7 @@ func (m *BPFProgram) LoadProg(progType string, data []byte, licenseStr string, p
 }
 
 func (attr *BpfProgAttr) isBpfProgGetNextID() bool {
-	var log = logger.Get()
+	//var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		utils.BPF_PROG_GET_NEXT_ID,
@@ -234,7 +236,7 @@ func (attr *BpfProgAttr) isBpfProgGetNextID() bool {
 }
 
 func (attr *BpfProgAttr) BpfProgGetFDbyID() (int, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		utils.BPF_PROG_GET_FD_BY_ID,
@@ -249,7 +251,7 @@ func (attr *BpfProgAttr) BpfProgGetFDbyID() (int, error) {
 }
 
 func (objattr *BpfObjGetInfo) BpfGetProgramInfoForFD() error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		utils.BPF_OBJ_GET_INFO_BY_FD,
@@ -265,7 +267,7 @@ func (objattr *BpfObjGetInfo) BpfGetProgramInfoForFD() error {
 }
 
 func GetBPFprogInfo(progFD int) (BpfProgInfo, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	var bpfProgInfo BpfProgInfo
 	objInfo := BpfObjGetInfo{
 		bpf_fd:   uint32(progFD),
@@ -287,7 +289,7 @@ func GetBPFprogInfo(progFD int) (BpfProgInfo, error) {
 }
 
 func (m *BPFProgram) GetBPFProgAssociatedMapsIDs(progFD int) ([]uint32, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	bpfProgInfo, err := GetBPFprogInfo(progFD)
 
 	if bpfProgInfo.NrMapIDs <= 0 {
@@ -315,7 +317,7 @@ func (m *BPFProgram) GetBPFProgAssociatedMapsIDs(progFD int) ([]uint32, error) {
 }
 
 func BpfGetMapInfoFromProgInfo(progFD int, numMaps uint32) (BpfProgInfo, []ebpf_maps.BpfMapInfo, []int, []int, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	associatedMaps := make([]uint32, numMaps)
 	newBpfProgInfo := BpfProgInfo{
 		NrMapIDs: numMaps,
@@ -374,7 +376,7 @@ func BpfGetMapInfoFromProgInfo(progFD int, numMaps uint32) (BpfProgInfo, []ebpf_
 }
 
 func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	loadedPrograms := []BpfProgInfo{}
 	attr := BpfProgAttr{}
 	log.Infof("In get all prog info")
@@ -401,7 +403,7 @@ func BpfGetAllProgramInfo() ([]BpfProgInfo, error) {
 }
 
 func (attr *BpfObjGet) BpfGetObject() (int, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		utils.BPF_OBJ_GET,
@@ -416,7 +418,7 @@ func (attr *BpfObjGet) BpfGetObject() (int, error) {
 }
 
 func (m *BPFProgram) BpfGetProgFromPinPath(pinPath string) (BpfProgInfo, int, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	log.Infof("Printing pinpath - %s ", pinPath)
 	if len(pinPath) == 0 {
 		return BpfProgInfo{}, -1, fmt.Errorf("Invalid pinPath")

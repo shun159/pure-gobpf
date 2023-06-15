@@ -14,6 +14,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var log = logger.Get()
+
 const (
 	BPF_MAP_TYPE_RINGBUF = 27
 )
@@ -43,7 +45,7 @@ type RingBuffer struct {
 }
 
 func InitRingBuffer(mapFD int) (<-chan []byte, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	if mapFD == -1 {
 		return nil, fmt.Errorf("Invalid map FD")
 	}
@@ -236,14 +238,12 @@ func memcpy(dst, src unsafe.Pointer, count uintptr) {
 
 // Similar to libbpf poll buffer
 func (rb *RingBuffer) ReadRingBuffer(eventRing *Ring) {
-	var log = logger.Get()
-	log.Infof("In read ring")
+	//var log = logger.Get()
 	var done bool
 	cons_pos := eventRing.getConsumerPosition()
 	for {
 		done = true
 		prod_pos := eventRing.getProducerPosition()
-		log.Infof("before for")
 		for cons_pos < prod_pos {
 
 			//Get the header
@@ -251,10 +251,8 @@ func (rb *RingBuffer) ReadRingBuffer(eventRing *Ring) {
 
 			//Get the len which is uint32 in header struct
 			Hdrlen := atomic.LoadInt32(buf)
-			log.Infof("con < prod")
 			//Check if busy then skip
 			if uint32(Hdrlen)&unix.BPF_RINGBUF_BUSY_BIT != 0 {
-				log.Infof("break here")
 				done = true
 				break
 			}
@@ -269,7 +267,6 @@ func (rb *RingBuffer) ReadRingBuffer(eventRing *Ring) {
 				sample := unsafe.Pointer(uintptr(unsafe.Pointer(buf)) + uintptr(ringbufHeaderSize))
 				dataBuf := make([]byte, int(Hdrlen))
 				memcpy(unsafe.Pointer(&dataBuf[0]), sample, uintptr(Hdrlen))
-				log.Infof("DataBUF ", dataBuf)
 				rb.eventsDataChannel <- dataBuf
 			}
 

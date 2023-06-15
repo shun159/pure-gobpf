@@ -13,6 +13,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var log = logger.Get()
+
 type BPFMap struct {
 	MapFD       uint32
 	MapID       uint32
@@ -120,7 +122,7 @@ type BpfMapAPIs interface {
 }
 
 func (m *BPFMap) CreateMap(MapMetaData BpfMapData) (BPFMap, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	mapCont := BpfMapData{
 		Def: BpfMapDef{
@@ -160,7 +162,7 @@ func (m *BPFMap) CreateMap(MapMetaData BpfMapData) (BPFMap, error) {
 }
 
 func (m *BPFMap) PinMap(pinPath string) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	if m.MapMetaData.Def.Pinning == utils.PIN_NONE {
 		return nil
 	}
@@ -199,7 +201,7 @@ func (m *BPFMap) PinMap(pinPath string) error {
 }
 
 func (m *BPFMap) UnPinMap(pinPath string) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	err := utils.UnPinObject(pinPath)
 	if err != nil {
 		log.Infof("Failed to unpin map")
@@ -223,7 +225,7 @@ func (m *BPFMap) UpdateMapEntry(key, value uintptr) error {
 
 func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	mapFD, err := utils.GetMapFDFromID(int(m.MapID))
 	if err != nil {
@@ -258,7 +260,7 @@ func (m *BPFMap) CreateUpdateMap(key, value uintptr, updateFlags uint64) error {
 
 func (m *BPFMap) DeleteMapEntry(key uintptr) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	mapFD, err := utils.GetMapFDFromID(int(m.MapID))
 	if err != nil {
@@ -292,7 +294,7 @@ func (m *BPFMap) GetFirstMapEntry(nextKey uintptr) error {
 
 func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	mapFD, err := utils.GetMapFDFromID(int(m.MapID))
 	if err != nil {
@@ -327,7 +329,7 @@ func (m *BPFMap) GetNextMapEntry(key, nextKey uintptr) error {
 }
 
 func (m *BPFMap) GetAllMapKeys() ([]string, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	var keyList []string
 	keySize := m.MapMetaData.Def.KeySize
 
@@ -341,7 +343,7 @@ func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 	} else {
 		for {
 			err = m.GetNextMapEntry(uintptr(unsafe.Pointer(&curKey[0])), uintptr(unsafe.Pointer(&nextKey[0])))
-			log.Info("Adding to key list %v", curKey)
+			log.Infof("Adding to key list %v", curKey)
 			keyList = append(keyList, string(curKey))
 			if errors.Is(err, unix.ENOENT) {
 				log.Infof("Done reading all entries")
@@ -361,7 +363,7 @@ func (m *BPFMap) GetAllMapKeys() ([]string, error) {
 
 func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	mapFD, err := utils.GetMapFDFromID(int(m.MapID))
 	if err != nil {
@@ -391,7 +393,7 @@ func (m *BPFMap) GetMapEntry(key, value uintptr) error {
 }
 
 func (m *BPFMap) BulkDeleteMapEntry(keyvalue map[uintptr]uintptr) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	for k, _ := range keyvalue {
 		err := m.DeleteMapEntry(k)
 		if err != nil {
@@ -404,9 +406,9 @@ func (m *BPFMap) BulkDeleteMapEntry(keyvalue map[uintptr]uintptr) error {
 }
 
 func (m *BPFMap) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	for k, v := range keyvalue {
-		log.Info("Key being programmed - in bytearray ", *((*uint64)(unsafe.Pointer(k))))
+		log.Infof("Key being programmed - in bytearray ", *((*uint64)(unsafe.Pointer(k))))
 		err := m.UpdateMapEntry(k, v)
 		if err != nil {
 			log.Infof("One of the element update failed hence returning from bulk update")
@@ -418,14 +420,14 @@ func (m *BPFMap) BulkUpdateMapEntry(keyvalue map[uintptr]uintptr) error {
 }
 
 func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	// 1. Construct i/p to bulkMap
 	keyvaluePtr := make(map[uintptr]uintptr)
 
 	for k, v := range newMapContents {
 		keyByte := []byte(k)
-		log.Info("Converted string to bytearray %v", keyByte)
+		log.Infof("Converted string to bytearray %v", keyByte)
 		keyPtr := uintptr(unsafe.Pointer(&keyByte[0]))
 		keyvaluePtr[keyPtr] = v
 	}
@@ -462,7 +464,7 @@ func (m *BPFMap) BulkRefreshMapEntries(newMapContents map[string]uintptr) error 
 }
 
 func (attr *BpfMapShowAttr) isBpfMapGetNextID() bool {
-	var log = logger.Get()
+	//var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		utils.BPF_MAP_GET_NEXT_ID,
@@ -479,7 +481,7 @@ func (attr *BpfMapShowAttr) isBpfMapGetNextID() bool {
 }
 
 func (objattr *BpfObjGetInfo) BpfGetMapInfoForFD() error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		utils.BPF_OBJ_GET_INFO_BY_FD,
@@ -519,7 +521,7 @@ func GetFDFromID(mapID int) (int, error) {
 */
 
 func GetBPFmapInfo(mapFD int) (BpfMapInfo, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	var bpfMapInfo BpfMapInfo
 	objInfo := BpfObjGetInfo{
 		bpf_fd:   uint32(mapFD),
@@ -539,7 +541,7 @@ func GetBPFmapInfo(mapFD int) (BpfMapInfo, error) {
 }
 
 func BpfGetAllMapInfo() ([]BpfMapInfo, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	loadedMaps := []BpfMapInfo{}
 	attr := BpfMapShowAttr{}
 	log.Infof("In get all prog info")
@@ -575,7 +577,7 @@ func BpfGetAllMapInfo() ([]BpfMapInfo, error) {
 }
 
 func (attr *BpfObjGet) BpfGetObject() (int, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	ret, _, errno := unix.Syscall(
 		unix.SYS_BPF,
 		utils.BPF_OBJ_GET,
@@ -590,7 +592,7 @@ func (attr *BpfObjGet) BpfGetObject() (int, error) {
 }
 
 func (m *BPFMap) BpfGetMapFromPinPath(pinPath string) (BpfMapInfo, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	log.Infof("Printing pinpath - %s ", pinPath)
 	if len(pinPath) == 0 {
 		return BpfMapInfo{}, fmt.Errorf("Invalid pinPath")
@@ -629,7 +631,7 @@ func GetFirstMapEntryByID(nextKey uintptr, mapID int) error {
 
 func GetNextMapEntryByID(key, nextKey uintptr, mapID int) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	mapFD, err := utils.GetMapFDFromID(mapID)
 	if err != nil {
@@ -665,7 +667,7 @@ func GetNextMapEntryByID(key, nextKey uintptr, mapID int) error {
 
 func GetMapEntryByID(key, value uintptr, mapID int) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	mapFD, err := utils.GetMapFDFromID(mapID)
 	if err != nil {

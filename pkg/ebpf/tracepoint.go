@@ -13,10 +13,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var log = logger.Get()
+
 // if event is nil, we pick funcName
 func TracepointAttach(progFD int, subSystem, eventName string) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	if progFD <= 0 {
 		log.Infof("Invalid BPF prog FD %d", progFD)

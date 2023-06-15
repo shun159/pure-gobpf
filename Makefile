@@ -25,9 +25,12 @@ EBPF_SOURCE := test-data/tc.ingress.bpf.c
 EBPF_BINARY := test-data/tc.ingress.bpf.elf
 EBPF_TEST_SOURCE := test-data/tc.bpf.c
 EBPF_TEST_BINARY := test-data/tc.bpf.elf 
+EBPF_TEST_MAP_SOURCE := test-data/test.map.bpf.c
+EBPF_TEST_MAP_BINARY := test-data/test.map.bpf.elf 
 build-bpf: ## Build BPF
 	$(CLANG) $(CLANG_INCLUDE) -g -O2 -Wall -fpie -target bpf -DCORE -D__BPF_TRACING__ -march=bpf -D__TARGET_ARCH_$(ARCH) -c $(EBPF_SOURCE) -o $(EBPF_BINARY)
 	$(CLANG) $(CLANG_INCLUDE) -g -O2 -Wall -fpie -target bpf -DCORE -D__BPF_TRACING__ -march=bpf -D__TARGET_ARCH_$(ARCH) -c $(EBPF_TEST_SOURCE) -o $(EBPF_TEST_BINARY)
+	$(CLANG) $(CLANG_INCLUDE) -g -O2 -Wall -fpie -target bpf -DCORE -D__BPF_TRACING__ -march=bpf -D__TARGET_ARCH_$(ARCH) -c $(EBPF_TEST_MAP_SOURCE) -o $(EBPF_TEST_MAP_BINARY)
 
 vmlinuxh:
 	bpftool btf dump file /sys/kernel/btf/vmlinux format c > $(abspath ./test-data/vmlinux.h)

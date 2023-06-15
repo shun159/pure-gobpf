@@ -9,8 +9,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var log = logger.Get()
+
 func enableQdisc(link netlink.Link) bool {
-	var log = logger.Get()
+	//var log = logger.Get()
 	log.Infof("Check if qdisc has to be enabled")
 	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
@@ -35,7 +37,7 @@ func enableQdisc(link netlink.Link) bool {
 }
 
 func TCIngressAttach(interfaceName string, progFD int) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	intf, err := netlink.LinkByName(interfaceName)
 	if err != nil {
 		log.Infof("Failed to find device name")
@@ -83,7 +85,7 @@ func TCIngressAttach(interfaceName string, progFD int) error {
 }
 
 func TCIngressDetach(interfaceName string) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	intf, err := netlink.LinkByName(interfaceName)
 	if err != nil {
 		log.Infof("Failed to find device name")
@@ -114,7 +116,7 @@ func TCIngressDetach(interfaceName string) error {
 }
 
 func TCEgressAttach(interfaceName string, progFD int) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	intf, err := netlink.LinkByName(interfaceName)
 	if err != nil {
 		log.Infof("Failed to find device name")
@@ -162,7 +164,7 @@ func TCEgressAttach(interfaceName string, progFD int) error {
 }
 
 func TCEgressDetach(interfaceName string) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	intf, err := netlink.LinkByName(interfaceName)
 	if err != nil {
 		log.Infof("Failed to find device name")
@@ -193,7 +195,7 @@ func TCEgressDetach(interfaceName string) error {
 }
 
 func CleanupQdiscs(prefix string) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	if prefix == "" {
 		log.Infof("Prefix should be given")

@@ -25,6 +25,8 @@ var (
 	bpfMapDefSize = binary.Size(ebpf_maps.BpfMapDef{})
 )
 
+var log = logger.Get()
+
 type BPFdata struct {
 	Program ebpf_progs.BPFProgram       // Return the program
 	Maps    map[string]ebpf_maps.BPFMap // List of associated maps
@@ -38,7 +40,7 @@ type relocationEntry struct {
 // This is not needed 5.11 kernel onwards because per-cgroup mem limits
 // https://lore.kernel.org/bpf/20201201215900.3569844-1-guro@fb.com/
 func IncreaseRlimit() error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{Cur: unix.RLIM_INFINITY, Max: unix.RLIM_INFINITY})
 	if err != nil {
 		log.Infof("Failed to bump up the rlimit")
@@ -48,7 +50,7 @@ func IncreaseRlimit() error {
 }
 
 func LoadBpfFile(path, customizedPinPath string) (map[string]BPFdata, map[string]ebpf_maps.BPFMap, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	f, err := os.Open(path)
 	if err != nil {
 		log.Infof("LoadBpfFile failed to open")
@@ -67,7 +69,7 @@ func LoadBpfFile(path, customizedPinPath string) (map[string]BPFdata, map[string
 }
 
 func loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File, bpfMapApi ebpf_maps.BpfMapAPIs, customizedPinPath string) (map[string]ebpf_maps.BPFMap, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	//Replace this TODO
 	mapDefinitionSize := bpfMapDefSize
 	GlobalMapData := []ebpf_maps.BpfMapData{}
@@ -154,7 +156,7 @@ func loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File,
 }
 
 func parseRelocationSection(reloSection *elf.Section, elfFile *elf.File) ([]relocationEntry, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	var result []relocationEntry
 
 	symbols, err := elfFile.Symbols()
@@ -209,7 +211,7 @@ func parseRelocationSection(reloSection *elf.Section, elfFile *elf.File) ([]relo
 }
 
 func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, subSystem string, subProgType string, sectionIndex int, elfFile *elf.File, bpfProgApi ebpf_progs.BpfProgAPIs, bpfMap ebpf_maps.BpfMapAPIs, customizedPinPath string, loadedMaps map[string]ebpf_maps.BPFMap) (BPFdata, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	isRelocationNeeded := true
 	insDefSize := bpfInsDefSize
@@ -411,7 +413,7 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 }
 
 func doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfProg ebpf_progs.BpfProgAPIs, customizedPinPath string) (map[string]BPFdata, map[string]ebpf_maps.BPFMap, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	var err error
 	elfFile, err := elf.NewFile(r)
 	if err != nil {
@@ -503,7 +505,7 @@ func doLoadELF(r io.ReaderAt, bpfMap ebpf_maps.BpfMapAPIs, bpfProg ebpf_progs.Bp
 }
 
 func GetMapNameFromBPFPinPath(pinPath string) (string, string) {
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	replicaNamespaceNameIdentifier := strings.Split(pinPath, "/")
 	podIdentifier := strings.SplitN(replicaNamespaceNameIdentifier[7], "_", 2)
@@ -531,7 +533,7 @@ func GetMapNameFromBPFPinPath(pinPath string) (string, string) {
 }
 
 func IsMapGlobal(pinPath string) bool {
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	replicaNamespaceNameIdentifier := strings.Split(pinPath, "/")
 	podIdentifier := strings.SplitN(replicaNamespaceNameIdentifier[7], "_", 2)
@@ -560,7 +562,7 @@ func IsMapGlobal(pinPath string) bool {
 }
 
 func RecoverGlobalMaps() (map[string]ebpf_maps.BPFMap, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	_, err := os.Stat(utils.BPF_DIR_MNT)
 	if err != nil {
 		log.Infof("BPF FS director is not present")
@@ -631,7 +633,7 @@ func RecoverGlobalMaps() (map[string]ebpf_maps.BPFMap, error) {
 }
 
 func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
-	var log = logger.Get()
+	//var log = logger.Get()
 	_, err := os.Stat(utils.BPF_DIR_MNT)
 	if err != nil {
 		log.Infof("BPF FS directory is not present")

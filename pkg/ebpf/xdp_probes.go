@@ -14,9 +14,11 @@ const (
 	XDP_ATTACH_MODE_HW   = 3
 )
 
+var log = logger.Get()
+
 func XDPAttach(interfaceName string, progFD int) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 	link, err := netlink.LinkByName(interfaceName)
 	if err != nil {
 		log.Infof("Failed linkbyname")
@@ -34,7 +36,7 @@ func XDPAttach(interfaceName string, progFD int) error {
 
 func XDPDetach(interfaceName string) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 	link, err := netlink.LinkByName(interfaceName)
 	if err != nil {
 		log.Infof("Failed linkbyname")

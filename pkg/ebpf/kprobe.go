@@ -16,6 +16,8 @@ const (
 	kprobeSysEventsFile = "/sys/kernel/debug/tracing/kprobe_events"
 )
 
+var log = logger.Get()
+
 /*
  p[:[GRP/]EVENT] [MOD:]SYM[+offs]|MEMADDR [FETCHARGS]  : Set a probe
  r[MAXACTIVE][:[GRP/]EVENT] [MOD:]SYM[+0] [FETCHARGS]  : Set a return probe
@@ -24,7 +26,7 @@ const (
 // if event is nil, we pick funcName
 func KprobeAttach(progFD int, eventName string, funcName string) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	if progFD <= 0 {
 		log.Infof("Invalid BPF prog FD %d", progFD)
@@ -113,7 +115,7 @@ MAXACTIVE      : Maximum number of instances of the specified function that
 // if event is nil, we pick funcName
 func KretprobeAttach(progFD int, eventName string, funcName string) error {
 
-	var log = logger.Get()
+	//var log = logger.Get()
 
 	if progFD <= 0 {
 		log.Infof("Invalid BPF prog FD %d", progFD)
@@ -189,7 +191,7 @@ func KretprobeAttach(progFD int, eventName string, funcName string) error {
 }
 
 func KprobeDetach(eventName string) error {
-	var log = logger.Get()
+	//var log = logger.Get()
 	log.Infof("Calling Detach on %s", eventName)
 	file, err := os.OpenFile(kprobeSysEventsFile, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
