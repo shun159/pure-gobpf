@@ -569,7 +569,7 @@ func RecoverGlobalMaps() (map[string]ebpf_maps.BPFMap, error) {
 		return nil, fmt.Errorf("BPF directory is not present %v", err)
 	}
 	loadedGlobalMaps := make(map[string]ebpf_maps.BPFMap)
-	var mapsApi ebpf_maps.BpfMapAPIs
+	mapsApi := &ebpf_maps.BPFMap{}
 	var statfs syscall.Statfs_t
 	if err := syscall.Statfs(utils.BPF_DIR_MNT, &statfs); err == nil && statfs.Type == unix.BPF_FS_MAGIC {
 		if err := filepath.Walk(utils.MAP_BPF_FS, func(pinPath string, fsinfo os.FileInfo, err error) error {
@@ -641,8 +641,10 @@ func RecoverAllBpfProgramsAndMaps() (map[string]BPFdata, error) {
 	}
 
 	var statfs syscall.Statfs_t
-	var mapsApi ebpf_maps.BpfMapAPIs
-	var showProgApi ebpf_progs.BpfProgAPIs
+
+	mapsApi := &ebpf_maps.BPFMap{}
+	showProgApi := &ebpf_progs.BPFProgram{}
+
 	//Pass DS here
 	loadedPrograms := make(map[string]BPFdata)
 	mapIDsToNames := make(map[int]string)
