@@ -211,6 +211,7 @@ func parseRelocationSection(reloSection *elf.Section, elfFile *elf.File) ([]relo
 func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license string, progType string, subSystem string, subProgType string, sectionIndex int, elfFile *elf.File, bpfProgApi ebpf_progs.BpfProgAPIs, bpfMap ebpf_maps.BpfMapAPIs, customizedPinPath string, loadedMaps map[string]ebpf_maps.BPFMap) (BPFdata, error) {
 	var log = logger.Get()
 
+	isRelocationNeeded := true
 	insDefSize := bpfInsDefSize
 
 	data, err := dataProg.Data()
@@ -218,8 +219,10 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 		return BPFdata{}, err
 	}
 
-	log.Infof("Loading Program with relocation section; Info:%v; Name: %s, Type: %s; Size: %v", reloSection.Info,
-		reloSection.Name, reloSection.Type, reloSection.Size)
+	if reloSection == nil {
+		log.Infof("Relocation is not needed")
+		isRelocationNeeded = false
+	}
 
 	//Single section might have multiple programs. So we retrieve one prog at a time and load.
 	symbolTable, err := elfFile.Symbols()
@@ -228,75 +231,81 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 		return BPFdata{}, fmt.Errorf("get symbols: %w", err)
 	}
 
-	relocationEntries, err := parseRelocationSection(reloSection, elfFile)
-	if err != nil || len(relocationEntries) == 0 {
-		return BPFdata{}, fmt.Errorf("Unable to parse relocation entries....")
-	}
-
-	log.Infof("Applying Relocations..")
 	mapIDToFD := make(map[int]string)
-	// TODO create a map array
-	for _, relocationEntry := range relocationEntries {
-		if relocationEntry.relOffset >= len(data) {
-			return BPFdata{}, fmt.Errorf("Invalid offset for the relocation entry %d", relocationEntry.relOffset)
+
+	if isRelocationNeeded {
+		log.Infof("Loading Program with relocation section; Info:%v; Name: %s, Type: %s; Size: %v", reloSection.Info,
+			reloSection.Name, reloSection.Type, reloSection.Size)
+
+		relocationEntries, err := parseRelocationSection(reloSection, elfFile)
+		if err != nil || len(relocationEntries) == 0 {
+			return BPFdata{}, fmt.Errorf("Unable to parse relocation entries....")
 		}
 
-		//eBPF has one 16-byte instruction: BPF_LD | BPF_DW | BPF_IMM which consists
-		//of two consecutive 'struct bpf_insn' 8-byte blocks and interpreted as single
-		//instruction that loads 64-bit immediate value into a dst_reg.
-		ebpfInstruction := &utils.BPFInsn{
-			Code:   data[relocationEntry.relOffset],
-			DstReg: data[relocationEntry.relOffset+1] & 0xf,
-			SrcReg: data[relocationEntry.relOffset+1] >> 4,
-			Off:    int16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:])),
-			Imm:    int32(binary.LittleEndian.Uint32(data[relocationEntry.relOffset+4:])),
-		}
-
-		log.Infof("BPF Instruction code: %s; offset: %d; imm: %d", ebpfInstruction.Code, ebpfInstruction.Off, ebpfInstruction.Imm)
-
-		//Validate for Invalid BPF instructions
-		if ebpfInstruction.Code != (unix.BPF_LD | unix.BPF_IMM | unix.BPF_DW) {
-			return BPFdata{}, fmt.Errorf("Invalid BPF instruction (at %d): %d",
-				relocationEntry.relOffset, ebpfInstruction.Code)
-		}
-
-		// Point BPF instruction to the FD of the map referenced. Update the last 4 bytes of
-		// instruction (immediate constant) with the map's FD.
-		// BPF_MEM | <size> | BPF_STX:  *(size *) (dst_reg + off) = src_reg
-		// BPF_MEM | <size> | BPF_ST:   *(size *) (dst_reg + off) = imm32
-		mapName := relocationEntry.symbol.Name
-		log.Infof("Map to be relocated; Name: %s", mapName)
-		var mapFD int
-		var map_id int
-		if progMap, ok := loadedMaps[mapName]; ok {
-			map_id = int(progMap.MapID)
-			mapIDToFD[map_id] = mapName
-			mapFD = int(progMap.MapFD)
-
-		} else {
-			//This might be a shared global map so get from pinpath
-			pinLocation := "global_" + mapName
-			globalPinPath := utils.MAP_BPF_FS + pinLocation
-			mapInfo, err := (bpfMap).BpfGetMapFromPinPath(globalPinPath)
-			if err != nil {
-				return BPFdata{}, fmt.Errorf("map '%s' doesn't exist", mapName)
+		log.Infof("Applying Relocations..")
+		// TODO create a map array
+		for _, relocationEntry := range relocationEntries {
+			if relocationEntry.relOffset >= len(data) {
+				return BPFdata{}, fmt.Errorf("Invalid offset for the relocation entry %d", relocationEntry.relOffset)
 			}
-			map_id = int(mapInfo.Id)
-			mapIDToFD[map_id] = mapName
-			mapFD, err = utils.GetMapFDFromID(map_id)
-			if err != nil {
-				return BPFdata{}, fmt.Errorf("Failed to get map FD '%s' doesn't exist", mapName)
-			}
-		}
 
-		log.Infof("Map found. Replace the offset with corresponding Map FD: %v", mapFD)
-		ebpfInstruction.SrcReg = 1 //dummy value for now
-		ebpfInstruction.Imm = int32(mapFD)
-		copy(data[relocationEntry.relOffset:relocationEntry.relOffset+8], ebpfInstruction.ConvertBPFInstructionToByteStream())
-		log.Infof("From data: BPF Instruction code: %d; offset: %d; imm: %d",
-			uint8(data[relocationEntry.relOffset]),
-			uint16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:relocationEntry.relOffset+4])),
-			uint32(binary.LittleEndian.Uint32(data[relocationEntry.relOffset+4:relocationEntry.relOffset+8])))
+			//eBPF has one 16-byte instruction: BPF_LD | BPF_DW | BPF_IMM which consists
+			//of two consecutive 'struct bpf_insn' 8-byte blocks and interpreted as single
+			//instruction that loads 64-bit immediate value into a dst_reg.
+			ebpfInstruction := &utils.BPFInsn{
+				Code:   data[relocationEntry.relOffset],
+				DstReg: data[relocationEntry.relOffset+1] & 0xf,
+				SrcReg: data[relocationEntry.relOffset+1] >> 4,
+				Off:    int16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:])),
+				Imm:    int32(binary.LittleEndian.Uint32(data[relocationEntry.relOffset+4:])),
+			}
+
+			log.Infof("BPF Instruction code: %s; offset: %d; imm: %d", ebpfInstruction.Code, ebpfInstruction.Off, ebpfInstruction.Imm)
+
+			//Validate for Invalid BPF instructions
+			if ebpfInstruction.Code != (unix.BPF_LD | unix.BPF_IMM | unix.BPF_DW) {
+				return BPFdata{}, fmt.Errorf("Invalid BPF instruction (at %d): %d",
+					relocationEntry.relOffset, ebpfInstruction.Code)
+			}
+
+			// Point BPF instruction to the FD of the map referenced. Update the last 4 bytes of
+			// instruction (immediate constant) with the map's FD.
+			// BPF_MEM | <size> | BPF_STX:  *(size *) (dst_reg + off) = src_reg
+			// BPF_MEM | <size> | BPF_ST:   *(size *) (dst_reg + off) = imm32
+			mapName := relocationEntry.symbol.Name
+			log.Infof("Map to be relocated; Name: %s", mapName)
+			var mapFD int
+			var map_id int
+			if progMap, ok := loadedMaps[mapName]; ok {
+				map_id = int(progMap.MapID)
+				mapIDToFD[map_id] = mapName
+				mapFD = int(progMap.MapFD)
+
+			} else {
+				//This might be a shared global map so get from pinpath
+				pinLocation := "global_" + mapName
+				globalPinPath := utils.MAP_BPF_FS + pinLocation
+				mapInfo, err := (bpfMap).BpfGetMapFromPinPath(globalPinPath)
+				if err != nil {
+					return BPFdata{}, fmt.Errorf("map '%s' doesn't exist", mapName)
+				}
+				map_id = int(mapInfo.Id)
+				mapIDToFD[map_id] = mapName
+				mapFD, err = utils.GetMapFDFromID(map_id)
+				if err != nil {
+					return BPFdata{}, fmt.Errorf("Failed to get map FD '%s' doesn't exist", mapName)
+				}
+			}
+
+			log.Infof("Map found. Replace the offset with corresponding Map FD: %v", mapFD)
+			ebpfInstruction.SrcReg = 1 //dummy value for now
+			ebpfInstruction.Imm = int32(mapFD)
+			copy(data[relocationEntry.relOffset:relocationEntry.relOffset+8], ebpfInstruction.ConvertBPFInstructionToByteStream())
+			log.Infof("From data: BPF Instruction code: %d; offset: %d; imm: %d",
+				uint8(data[relocationEntry.relOffset]),
+				uint16(binary.LittleEndian.Uint16(data[relocationEntry.relOffset+2:relocationEntry.relOffset+4])),
+				uint32(binary.LittleEndian.Uint32(data[relocationEntry.relOffset+4:relocationEntry.relOffset+8])))
+		}
 	}
 
 	var pgmList = make(map[string]ebpf_progs.BPFProgram)
@@ -361,20 +370,22 @@ func loadElfProgSection(dataProg *elf.Section, reloSection *elf.Section, license
 						SubProgType: subProgType,
 					}
 
-					// TODO get prog info by FD and get list of maps..to fill
-					associatedMaps, err := bpfProgApi.GetBPFProgAssociatedMapsIDs(progFD)
-					if err != nil {
-						log.Infof("Failed to load prog")
-						return BPFdata{}, fmt.Errorf("Failed to Load the prog, get associatedmapIDs failed")
-					}
-					//walk thru all mapIDs and get loaded FDs and fill BPFData
-
 					progMaps := make(map[string]ebpf_maps.BPFMap)
-					for mapInfoIdx := 0; mapInfoIdx < len(associatedMaps); mapInfoIdx++ {
-						mapID := associatedMaps[mapInfoIdx]
-						//TODO - Need an error check for unkown map ID
-						if mapName, ok := mapIDToFD[int(mapID)]; ok {
-							progMaps[mapName] = loadedMaps[mapName]
+
+					if isRelocationNeeded {
+						// TODO get prog info by FD and get list of maps..to fill
+						associatedMaps, err := bpfProgApi.GetBPFProgAssociatedMapsIDs(progFD)
+						if err != nil {
+							log.Infof("Failed to load prog")
+							return BPFdata{}, fmt.Errorf("Failed to Load the prog, get associatedmapIDs failed")
+						}
+						//walk thru all mapIDs and get loaded FDs and fill BPFData
+						for mapInfoIdx := 0; mapInfoIdx < len(associatedMaps); mapInfoIdx++ {
+							mapID := associatedMaps[mapInfoIdx]
+							//TODO - Need an error check for unkown map ID
+							if mapName, ok := mapIDToFD[int(mapID)]; ok {
+								progMaps[mapName] = loadedMaps[mapName]
+							}
 						}
 					}
 
