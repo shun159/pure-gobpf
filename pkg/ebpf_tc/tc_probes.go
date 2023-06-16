@@ -208,7 +208,7 @@ func TCEgressDetach(interfaceName string) error {
 	return fmt.Errorf("Detach failed on egress interface - %s", interfaceName)
 }
 
-func CleanupQdiscs(prefix string) error {
+func CleanupQdiscs(prefix string, ingressCleanup bool, egressCleanup bool) error {
 	//var log = logger.Get()
 
 	if prefix == "" {
@@ -226,14 +226,18 @@ func CleanupQdiscs(prefix string) error {
 		linkName := link.Attrs().Name
 		if strings.HasPrefix(linkName, prefix) {
 			log.Infof("Trying to cleanup on %s", linkName)
-			err = TCIngressDetach(linkName)
-			if err != nil {
-				log.Infof("Failed to detach ingress, might not be present so moving on")
+			if ingressCleanup {
+				err = TCIngressDetach(linkName)
+				if err != nil {
+					log.Infof("Failed to detach ingress, might not be present so moving on")
+				}
 			}
 
-			err = TCEgressDetach(linkName)
-			if err != nil {
-				log.Infof("Failed to detach ingress, might not be present so moving on")
+			if egressCleanup {
+				err = TCEgressDetach(linkName)
+				if err != nil {
+					log.Infof("Failed to detach egress, might not be present so moving on")
+				}
 			}
 		}
 	}
