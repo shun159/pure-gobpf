@@ -225,8 +225,8 @@ func CleanupQdiscs(prefix string, ingressCleanup bool, egressCleanup bool) error
 	for _, link := range linkList {
 		linkName := link.Attrs().Name
 		if strings.HasPrefix(linkName, prefix) {
-			log.Infof("Trying to cleanup on %s", linkName)
 			if ingressCleanup {
+				log.Infof("Trying to cleanup ingress on %s", linkName)
 				err = TCIngressDetach(linkName)
 				if err != nil {
 					log.Infof("Failed to detach ingress, might not be present so moving on")
@@ -234,6 +234,7 @@ func CleanupQdiscs(prefix string, ingressCleanup bool, egressCleanup bool) error
 			}
 
 			if egressCleanup {
+				log.Infof("Trying to cleanup egress on %s", linkName)
 				err = TCEgressDetach(linkName)
 				if err != nil {
 					log.Infof("Failed to detach egress, might not be present so moving on")
