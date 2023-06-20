@@ -1,6 +1,7 @@
 bpf-sdk
 .idea
-test/
 coverage.txt
 test-data/vmlinux.h
 test-data/*.elf
+test/c/vmlinux.h
+test/c/*.elf

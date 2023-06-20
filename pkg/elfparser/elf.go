@@ -154,6 +154,8 @@ func loadElfMapsSection(mapsShndx int, dataMaps *elf.Section, elfFile *elf.File,
 		}
 
 		pinPath := utils.MAP_BPF_FS + mapNameStr
+		
+		log.Infof("Pinpath ", pinPath)
 		bpfMap.PinMap(pinPath)
 
 		//Fill ID

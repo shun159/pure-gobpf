@@ -98,6 +98,9 @@ func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) (<-chan []by
 		Mask:            uint64(maxEntries - 1),
 	}
 
+	// [Consumer page - 4k][Producer page - 4k][Data section - twice the size of max entries]
+	// Refer kernel code, twice the size of max entries will help in boundary scenarios
+
 	tmp, err := unix.Mmap(mapFD, 0, rb.PageSize, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create Mmap for consumer -> %d: %s", mapFD, err)
@@ -116,6 +119,7 @@ func (rb *RingBuffer) SetupRingBuffer(mapFD int, maxEntries uint32) (<-chan []by
 	ring.Producer_pos = unsafe.Pointer(&tmp[0])
 	ring.Producer = tmp
 	ring.Data = unsafe.Pointer(uintptr(unsafe.Pointer(&tmp[0])) + uintptr(rb.PageSize))
+	
 	epollEvent := unix.EpollEvent{
 		Events: unix.EPOLLIN,
 		Fd:     int32(rb.RingCnt),
@@ -229,12 +233,6 @@ func (r *Ring) getProducerPosition() uint64 {
 
 }
 
-func align(hdrlen uint32) uint32 {
-	//Remove discard and busy
-	newlen := (((hdrlen << 2) >> 2) + uint32(ringbufHeaderSize))
-	return (newlen + (8 - 1)) / 8 * 8
-}
-
 var ringbufHeaderSize = binary.Size(ringbufHeader{})
 
 // ringbufHeader from 'struct bpf_ringbuf_hdr' in kernel/bpf/ringbuf.c
@@ -252,7 +250,6 @@ func memcpy(dst, src unsafe.Pointer, count uintptr) {
 
 // Similar to libbpf poll buffer
 func (rb *RingBuffer) ReadRingBuffer(eventRing *Ring) {
-	//var log = logger.Get()
 	var done bool
 	cons_pos := eventRing.getConsumerPosition()
 	for {
@@ -260,11 +257,12 @@ func (rb *RingBuffer) ReadRingBuffer(eventRing *Ring) {
 		prod_pos := eventRing.getProducerPosition()
 		for cons_pos < prod_pos {
 
-			//Get the header
+			//Get the header - Data points to the DataPage which will be offset by cons_pos
 			buf := (*int32)(unsafe.Pointer(uintptr(eventRing.Data) + (uintptr(cons_pos) & uintptr(eventRing.Mask))))
 
 			//Get the len which is uint32 in header struct
 			Hdrlen := atomic.LoadInt32(buf)
+			
 			//Check if busy then skip
 			if uint32(Hdrlen)&unix.BPF_RINGBUF_BUSY_BIT != 0 {
 				done = true
@@ -273,14 +271,17 @@ func (rb *RingBuffer) ReadRingBuffer(eventRing *Ring) {
 
 			done = false
 
-			//Read upto 8 bytes
-			cons_pos += uint64(align(uint32(Hdrlen)))
+			// Len in ringbufHeader has busy and discard bit so skip it
+			dataLen := (((uint32(Hdrlen) << 2) >> 2) + uint32(ringbufHeaderSize))
+			//round up dataLen to nearest 8-byte alignment
+			roundedDataLen := (dataLen + 7) &^ 7
 
-			//if not discard
+			cons_pos += uint64(roundedDataLen)
+
 			if uint32(Hdrlen)&unix.BPF_RINGBUF_DISCARD_BIT == 0 {
-				sample := unsafe.Pointer(uintptr(unsafe.Pointer(buf)) + uintptr(ringbufHeaderSize))
-				dataBuf := make([]byte, int(Hdrlen))
-				memcpy(unsafe.Pointer(&dataBuf[0]), sample, uintptr(Hdrlen))
+				readableSample := unsafe.Pointer(uintptr(unsafe.Pointer(buf)) + uintptr(ringbufHeaderSize))
+				dataBuf := make([]byte, int(roundedDataLen))
+				memcpy(unsafe.Pointer(&dataBuf[0]), readableSample, uintptr(roundedDataLen))
 				rb.eventsDataChannel <- dataBuf
 			}
 
