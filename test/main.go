@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"github.com/fatih/color"
+	"unsafe"
 	goelf "github.com/jayanthvn/pure-gobpf/pkg/elfparser"
 	"github.com/jayanthvn/pure-gobpf/pkg/ebpf_tc"
 )
@@ -55,6 +56,8 @@ func main() {
  	testFunctions := []testFunc{
 		{Name: "Test loading Program", Func: TestLoadProg},
 		{Name: "Test loading TC filter", Func: TestLoadTCfilter},
+		{Name: "Test loading Maps without Program", Func: TestLoadMapWithNoProg},
+		{Name: "Test loading Map operations", Func: TestMapOperations},
 	}
 
 	testSummary := make(map[string]string)
@@ -104,6 +107,156 @@ func TestLoadProg() error {
 		fmt.Println("Prog Info: ", "Pin Path: ", k)
 	}
 	return nil
+}
+
+func TestLoadMapWithNoProg() error {
+	_, loadedMap, err := goelf.LoadBpfFile("c/test-map.bpf.elf", "test")
+	if err != nil {
+		fmt.Println("Load BPF failed", "err:", err)
+		return err
+	}
+
+	for k, _ := range loadedMap {
+		fmt.Println("Map Info: ", "Name: ", k)
+	}
+	return nil
+
+}
+
+func TestMapOperations() error {
+	_, loadedMap, err := goelf.LoadBpfFile("c/test-map.bpf.elf", "operations")
+	if err != nil {
+		fmt.Println("Load BPF failed", "err:", err)
+		return err
+	}
+
+	for k, _ := range loadedMap {
+		fmt.Println("Map Info: ", "Name: ", k)
+	}
+
+	type BPFInetTrieKey struct {
+		Prefixlen uint32
+		Addr [4]byte
+	}
+	dummykey := BPFInetTrieKey{
+		Prefixlen: 32,
+		Addr: [4]byte{192, 168, 0, 0},
+	}
+	dummyvalue := uint32(40)
+
+	dummykey2 := BPFInetTrieKey{
+		Prefixlen: 32,
+		Addr: [4]byte{192, 168, 0, 1},
+	}
+	dummyvalue2 := uint32(30)
+
+	if mapToUpdate, ok := loadedMap["ingress_map"]; ok {
+		fmt.Println("Found map to Create entry")
+		err = mapToUpdate.CreateMapEntry(uintptr(unsafe.Pointer((&dummykey))), uintptr(unsafe.Pointer((&dummyvalue))))
+		if err != nil {
+			fmt.Println("Unable to Insert into eBPF map: ", err)
+			return err
+		}
+		dummyvalue := uint32(20)
+
+		fmt.Println("Found map to Update entry")
+		err = mapToUpdate.UpdateMapEntry(uintptr(unsafe.Pointer((&dummykey))), uintptr(unsafe.Pointer((&dummyvalue))))
+		if err != nil {
+			fmt.Println("Unable to Update into eBPF map: ", err)
+			return err
+		}
+
+		var mapVal uint32
+		fmt.Println("Get map entry")
+		err := mapToUpdate.GetMapEntry(uintptr(unsafe.Pointer(&dummykey)), uintptr(unsafe.Pointer(&mapVal)))
+		if err != nil {
+			fmt.Println("Unable to get map entry: ", err)
+			return err
+		} else {
+			fmt.Println("Found the map entry and value ", mapVal)
+		}
+
+		fmt.Println("Found map to Create dummy2 entry")
+		err = mapToUpdate.CreateMapEntry(uintptr(unsafe.Pointer((&dummykey2))), uintptr(unsafe.Pointer((&dummyvalue2))))
+		if err != nil {
+			fmt.Println("Unable to Insert into eBPF map: ", err)
+			return err
+		}
+
+		fmt.Println("Try get first  key")
+		nextKey := BPFInetTrieKey{}
+		err = mapToUpdate.GetNextMapEntry(uintptr(unsafe.Pointer(nil)), uintptr(unsafe.Pointer(&nextKey)))
+		if err != nil {
+			fmt.Println("Unable to get next key: ", err)
+			return err
+		} else {
+			fmt.Println("Get map entry of next key")
+			var newMapVal uint32
+			err := mapToUpdate.GetMapEntry(uintptr(unsafe.Pointer(&nextKey)), uintptr(unsafe.Pointer(&newMapVal)))
+			if err != nil {
+				fmt.Println("Unable to get next map entry: ", err)
+				return err
+			} else {
+				fmt.Println("Found the next map entry and value ", newMapVal)
+			}
+		}
+
+		fmt.Println("Try next key")
+		nextKey = BPFInetTrieKey{}
+		err = mapToUpdate.GetNextMapEntry(uintptr(unsafe.Pointer(&dummykey)), uintptr(unsafe.Pointer(&nextKey)))
+		if err != nil {
+			fmt.Println("Unable to get next key: ", err)
+			return err
+		} else {
+			fmt.Println("Get map entry of next key")
+			var newMapVal uint32
+			err := mapToUpdate.GetMapEntry(uintptr(unsafe.Pointer(&nextKey)), uintptr(unsafe.Pointer(&newMapVal)))
+			if err != nil {
+				fmt.Println("Unable to get next map entry: ", err)
+				return err
+			} else {
+				fmt.Println("Found the next map entry and value ", newMapVal)
+			}
+		}
+
+		fmt.Println("Dump all entries in map")
+
+		iterKey := BPFInetTrieKey{}
+		iterNextKey := BPFInetTrieKey{}
+
+		err = mapToUpdate.GetFirstMapEntry(uintptr(unsafe.Pointer(&iterKey)))
+		if err != nil {
+			fmt.Println("Unable to get First key: ", err)
+			return err
+		} else {
+			for {
+				var newMapVal uint32
+				err = mapToUpdate.GetMapEntry(uintptr(unsafe.Pointer(&iterKey)), uintptr(unsafe.Pointer(&newMapVal)))
+				if err != nil {
+					fmt.Println("Unable to get map entry: ", err)
+					return err
+				} else {
+					fmt.Println("Found the map entry and value ", newMapVal)
+				}
+
+				err = mapToUpdate.GetNextMapEntry(uintptr(unsafe.Pointer(&iterKey)), uintptr(unsafe.Pointer(&iterNextKey)))
+				if err != nil {
+					fmt.Println("Done searching")
+					break
+				}
+				iterKey = iterNextKey
+			}
+		}
+
+		fmt.Println("Found map to Delete entry")
+		err = mapToUpdate.DeleteMapEntry(uintptr(unsafe.Pointer((&dummykey))))
+		if err != nil {
+			fmt.Println("Unable to Delete in eBPF map: ", err)
+			return err
+		}
+	}
+	return nil
+
 }
 
 func TestLoadTCfilter() error {

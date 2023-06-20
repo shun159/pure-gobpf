@@ -1,4 +1,4 @@
-.PHONY: all build-test 
+.PHONY: all build-test build-test-bpf 
 
 export GOPROXY = direct
 
@@ -13,12 +13,17 @@ build-test:    ## Build the VPC CNI plugin agent using the host's Go toolchain.
 # Build BPF
 CLANG := clang
 CLANG_INCLUDE := -I../../..
-EBPF_SOURCE := c/test.bpf.c
-EBPF_BINARY := c/test.bpf.elf
-build-bpf: ## Build BPF
-build-bpf: vmlinuxh
-build-bpf:	
-	$(CLANG) $(CLANG_INCLUDE) -g -O2 -Wall -fpie -target bpf -DCORE -D__BPF_TRACING__ -march=bpf -D__TARGET_ARCH_$(ARCH) -c $(EBPF_SOURCE) -o $(EBPF_BINARY)
+CFLAGS := -g -O2 -Wall -fpie -target bpf -DCORE -D__BPF_TRACING__ -march=bpf -D__TARGET_ARCH_$(ARCH)
+SRCDIR := c
+TARGETS := $(patsubst %.c, %.elf, $(shell find $(SRCDIR) -type f -name "*.c"))
+
+build-test-bpf: ## Build BPF
+build-test-bpf: vmlinuxh
+build-test-bpf: $(TARGETS)
+
+%.elf: %.c
+	$(CLANG) $(CLANG_INCLUDE) $(CFLAGS) -c $< -o $@
+
 
 vmlinuxh:
 	bpftool btf dump file /sys/kernel/btf/vmlinux format c > $(abspath c/vmlinux.h)
@@ -27,7 +32,7 @@ vmlinuxh:
 ##@ Run Tests
 # Run tests
 run-test: vmlinuxh
-run-test: build-bpf
+run-test: build-test-bpf
 run-test: build-test
 run-test: export AWS_EBPF_SDK_LOG_FILE=stdout
 run-test:    ## Run unit tests
